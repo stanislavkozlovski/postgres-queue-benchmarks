@@ -16,7 +16,7 @@ In my simple tests, I find this increases read throughput by **50%** at larger s
 ## 1. Prepare Server Environment
 Create a Server EC2. Pick the instance carefully
 ```bash
-export PRIVATE_IP=172.31.20.198
+export PRIVATE_IP=172.31.18.113
 ### Mount fast volume for PostgreSQL data
 DEV=/dev/nvme1n1    # adjust if lsblk shows a different device
 MNT=/pgdata
@@ -26,10 +26,7 @@ sudo mkdir -p $MNT
 sudo mount $DEV $MNT
 
 sudo mkdir -p $MNT/pg17
-sudo chown -R postgres:postgres $MNT/pg17
-sudo chmod 700 $MNT/pg17
-sudo chown root:postgres $MNT
-sudo chmod 750 $MNT
+
 # persist mount
 UUID=$(sudo blkid -s UUID -o value $DEV)
 echo "UUID=$UUID $MNT xfs defaults,nofail 0 2" | sudo tee -a /etc/fstab
@@ -43,13 +40,20 @@ curl https://www.postgresql.org/media/keys/ACCC4CF8.asc | \
 echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" | \
   sudo tee /etc/apt/sources.list.d/pgdg.list
 
-sudo apt-get update -y
+sudo apt-get update -y # twice, post updating the sources
 sudo apt-get install -y postgresql-17 postgresql-client-17 postgresql-common
 
 
 ### Create cluster on mounted volume
 sudo pg_dropcluster --stop 17 main
-sudo pg_createcluster 17 main --datadir=$MNT/pg17 --port=5432 -- -c listen_addresses='$PRIVATE_IP,localhost'
+
+sudo chown -R postgres:postgres $MNT/pg17
+sudo chmod 700 $MNT/pg17
+sudo chown postgres:postgres $MNT
+sudo chmod 700 $MNT
+
+sudo pg_createcluster 17 main --datadir=$MNT/pg17 --port=5432 -- -c listen_addresses='172.31.18.113,localhost'
+sudo systemctl start postgresql@17-main
 
 pg_lsclusters
 
@@ -87,7 +91,7 @@ chmod +x ./pg_queue_bench
 ```
 Run the Benchmark
 
-export HOST="172.31.20.198"  # adjust to your server's private IP
+export HOST="172.31.18.113"  # adjust to your server's private IP
 ```bash
 ./pg_queue_bench \
   --host=$HOST \
@@ -99,7 +103,8 @@ export HOST="172.31.20.198"  # adjust to your server's private IP
   --readers=50 \
   --duration=120s \
   --payload=1024 \
-  --report=5s
+  --report=5s \
+  --
 ```
 
 **Flags**

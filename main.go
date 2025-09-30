@@ -16,13 +16,14 @@ import (
 )
 
 type Config struct {
-	ConnStr        string
-	Writers        int
-	Readers        int
-	Duration       time.Duration
-	PayloadSize    int
-	ReportInterval time.Duration
-	ThrottleWrites int // rows/sec, 0 = unlimited
+	ConnStr         string
+	Writers         int
+	Readers         int
+	Duration        time.Duration
+	PayloadSize     int
+	ReportInterval  time.Duration
+	ThrottleWrites  int  // rows/sec, 0 = unlimited
+	TuneTableVacuum bool // if true, alter vacuum params on queue table
 }
 
 type BenchmarkRun struct {
@@ -81,6 +82,20 @@ func (br *BenchmarkRun) Setup() error {
 		if _, err := br.db.ExecContext(br.ctx, q); err != nil {
 			return fmt.Errorf("setup: %w", err)
 		}
+	}
+	// optional tuning for queue table
+	if br.config.TuneTableVacuum {
+		tuneSQL := `
+			ALTER TABLE queue SET (
+				autovacuum_vacuum_scale_factor = 0.01,
+				autovacuum_vacuum_insert_threshold = 1000,
+				autovacuum_analyze_scale_factor = 0.05,
+				fillfactor = 70
+			)`
+		if _, err := br.db.ExecContext(br.ctx, tuneSQL); err != nil {
+			return fmt.Errorf("tune-table: %w", err)
+		}
+		log.Println("[info] applied aggressive autovacuum/fillfactor tuning to queue table")
 	}
 	return nil
 }
@@ -240,6 +255,7 @@ func main() {
 		payload        = flag.Int("payload", 1024, "Payload size in bytes")
 		reportEvery    = flag.Duration("report", 5*time.Second, "Report interval")
 		throttleWrites = flag.Int("throttle_writes", 0, "Throttle writer rows/sec (0=unlimited)")
+		tuneTableVac   = flag.Bool("tune-table-vacuum", false, "Apply aggressive autovacuum/fillfactor to queue table")
 	)
 	flag.Parse()
 
@@ -250,13 +266,14 @@ func main() {
 	}
 
 	cfg := &Config{
-		ConnStr:        connStr,
-		Writers:        *writers,
-		Readers:        *readers,
-		Duration:       *duration,
-		PayloadSize:    *payload,
-		ReportInterval: *reportEvery,
-		ThrottleWrites: *throttleWrites,
+		ConnStr:         connStr,
+		Writers:         *writers,
+		Readers:         *readers,
+		Duration:        *duration,
+		PayloadSize:     *payload,
+		ReportInterval:  *reportEvery,
+		ThrottleWrites:  *throttleWrites,
+		TuneTableVacuum: *tuneTableVac,
 	}
 
 	br, err := NewBenchmarkRun(cfg)
