@@ -13,20 +13,28 @@ type Metrics struct {
 	WriteErrors      atomic.Int64
 	ReadErrors       atomic.Int64
 
+	// Writer captures the latency to execute the INSERT write query
 	writerHists []*hdrhistogram.Histogram
-	readerHists []*hdrhistogram.Histogram
+	// Read Select captures the latency to execute the SELECT+DELETE+INSERT read combination
+	readerReadHists []*hdrhistogram.Histogram
+	// E2E captures the end-to-end latency, `read_time - write_time`
+	readerE2EHists []*hdrhistogram.Histogram
 }
 
 func NewMetrics(writers, readers int) *Metrics {
 	m := &Metrics{
-		writerHists: make([]*hdrhistogram.Histogram, writers),
-		readerHists: make([]*hdrhistogram.Histogram, readers),
+		writerHists:     make([]*hdrhistogram.Histogram, writers),
+		readerReadHists: make([]*hdrhistogram.Histogram, readers),
+		readerE2EHists:  make([]*hdrhistogram.Histogram, readers),
 	}
 	for i := range m.writerHists {
 		m.writerHists[i] = hdrhistogram.New(1, int64(10e9), 3) // 1ns–10s
 	}
-	for i := range m.readerHists {
-		m.readerHists[i] = hdrhistogram.New(1, int64(10e9), 3)
+	for i := range m.readerReadHists {
+		m.readerReadHists[i] = hdrhistogram.New(1, int64(10e9), 3)
+	}
+	for i := range m.readerE2EHists {
+		m.readerE2EHists[i] = hdrhistogram.New(1, int64(10e9), 3)
 	}
 	return m
 }

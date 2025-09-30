@@ -128,7 +128,8 @@ func (br *BenchmarkRun) Reader(id int, wg *sync.WaitGroup) {
 	conn, _ := br.db.Conn(br.ctx)
 	defer conn.Close()
 
-	hist := br.metrics.readerHists[id]
+	selectHist := br.metrics.readerReadHists[id]
+	e2eHist := br.metrics.readerE2EHists[id]
 
 	const selSQL = `
 		SELECT id, payload, created_at
@@ -195,9 +196,13 @@ func (br *BenchmarkRun) Reader(id int, wg *sync.WaitGroup) {
 
 			br.metrics.ReadsCompleted.Add(1)
 			br.metrics.UpdatesCompleted.Add(1)
-			lat := time.Since(start).Nanoseconds()
-			if err := hist.RecordValue(lat); err != nil {
-				log.Printf("[reader %d] histogram record error: %v (lat=%dns)", id, err, lat)
+			selectLatency := time.Since(start).Nanoseconds()
+			if err := selectHist.RecordValue(selectLatency); err != nil {
+				log.Printf("[reader %d] histogram record error: %v (lat=%dns)", id, err, selectLatency)
+			}
+			e2eLatency := time.Since(created).Nanoseconds()
+			if err := e2eHist.RecordValue(e2eLatency); err != nil {
+				log.Printf("[reader %d] histogram record e2e latency error: %v (lat=%dns)", id, err, e2eLatency)
 			}
 		}
 	}
@@ -266,4 +271,3 @@ func main() {
 	_ = br.db.Close()
 	log.Println("benchmark complete")
 }
-

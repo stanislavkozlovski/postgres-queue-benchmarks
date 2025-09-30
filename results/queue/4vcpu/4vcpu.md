@@ -30,4 +30,9 @@ Ran three times. See detailed results in [unlimited_writes_runs.md](./unlimited_
 # Run 2 (limit writes to max reads we can get)
 
 Since writes massively outpace reads, let's see if artificially throttling them to some rate can improve our reads.
-Our goal is to figure out what's the max 1:1 ratio they can reach.
+Our goal is to figure out what's the max 1:1 ratio they can reach.  The methodology I follow is to just run with a few different max write rates, until I feel it is stable at a certain throughput.  I landed at 4.5 MB/s.
+
+```bash
+./pg_queue_bench   --host=$HOST   --port=5432   --db=benchmark   --user=postgres   --password=postgres   --writers=50   --readers=50   --duration=120s   --payload=1024   --report=5s --throttle_writes 4500
+```
+Ran three times. See detailed results in [limited_writes_runs.md](./limited_writes_runs.md). It averages out to:

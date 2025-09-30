@@ -68,7 +68,6 @@ func mergeHists(hists []*hdrhistogram.Histogram) *hdrhistogram.Histogram {
 	}
 	return out
 }
-
 func (br *BenchmarkRun) PrintSummary() {
 	fmt.Printf("\n=== Summary ===\n")
 	fmt.Printf("Total Writes: %d\n", br.metrics.WritesCompleted.Load())
@@ -84,19 +83,26 @@ func (br *BenchmarkRun) PrintSummary() {
 	}
 
 	writeHist := mergeHists(br.metrics.writerHists)
-	readHist := mergeHists(br.metrics.readerHists)
+	readHist := mergeHists(br.metrics.readerReadHists)
+	e2eHist := mergeHists(br.metrics.readerE2EHists)
 
 	if writeHist != nil {
-		fmt.Printf("\nWrite Latencies:\n")
+		fmt.Printf("\nWrite Latencies (INSERT only):\n")
 		fmt.Printf("  P50: %v\n", time.Duration(writeHist.ValueAtQuantile(50)))
 		fmt.Printf("  P95: %v\n", time.Duration(writeHist.ValueAtQuantile(95)))
 		fmt.Printf("  P99: %v\n", time.Duration(writeHist.ValueAtQuantile(99)))
 	}
 	if readHist != nil {
-		fmt.Printf("\nRead Latencies:\n")
+		fmt.Printf("\nRead Latencies (txn: SELECT+DELETE+INSERT):\n")
 		fmt.Printf("  P50: %v\n", time.Duration(readHist.ValueAtQuantile(50)))
 		fmt.Printf("  P95: %v\n", time.Duration(readHist.ValueAtQuantile(95)))
 		fmt.Printf("  P99: %v\n", time.Duration(readHist.ValueAtQuantile(99)))
+	}
+	if e2eHist != nil {
+		fmt.Printf("\nEnd-to-End Latencies (created_at → consumed):\n")
+		fmt.Printf("  P50: %v\n", time.Duration(e2eHist.ValueAtQuantile(50)))
+		fmt.Printf("  P95: %v\n", time.Duration(e2eHist.ValueAtQuantile(95)))
+		fmt.Printf("  P99: %v\n", time.Duration(e2eHist.ValueAtQuantile(99)))
 	}
 	fmt.Println()
 }
