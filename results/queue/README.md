@@ -10,12 +10,13 @@ Vacuum apparently takes time to prune them away, and until it does - reads are s
 
 A more performant approach is to delete rows once read.
 This keeps the table small and performant. Since we don't necessarily want to omit the data (some companies have a policy of never deleting, at least before a backup) - we will move the data to another table.
-
+In my simple tests, I find this increases read throughput by **50%** at larger scale.
 ---
 
-## 1. Prepare Environment
-
+## 1. Prepare Server Environment
+Create a Server EC2. Pick the instance carefully
 ```bash
+export PRIVATE_IP=172.31.20.198
 ### Mount fast volume for PostgreSQL data
 DEV=/dev/nvme1n1    # adjust if lsblk shows a different device
 MNT=/pgdata
@@ -25,8 +26,10 @@ sudo mkdir -p $MNT
 sudo mount $DEV $MNT
 
 sudo mkdir -p $MNT/pg17
-sudo chown -R postgres:postgres /pgdata/pg17
-sudo chmod 700 /pgdata/pg17
+sudo chown -R postgres:postgres $MNT/pg17
+sudo chmod 700 $MNT/pg17
+sudo chown root:postgres $MNT
+sudo chmod 750 $MNT
 # persist mount
 UUID=$(sudo blkid -s UUID -o value $DEV)
 echo "UUID=$UUID $MNT xfs defaults,nofail 0 2" | sudo tee -a /etc/fstab
@@ -46,16 +49,24 @@ sudo apt-get install -y postgresql-17 postgresql-client-17 postgresql-common
 
 ### Create cluster on mounted volume
 sudo pg_dropcluster --stop 17 main
-sudo pg_createcluster 17 main --datadir=$MNT/pg17 --port=5432
+sudo pg_createcluster 17 main --datadir=$MNT/pg17 --port=5432 -- -c listen_addresses='$PRIVATE_IP,localhost'
+
 pg_lsclusters
 
+### allow all traffic
+echo "host all all 0.0.0.0/0 md5" | sudo tee -a /etc/postgresql/17/main/pg_hba.conf
+sudo systemctl reload postgresql@17-main
 
 ### Configure database
 sudo -u postgres createdb benchmark
 sudo -u postgres psql -c "ALTER USER postgres WITH PASSWORD 'postgres';"
 ```
-## 2. Install Go
 
+## 2. Prepare Client Environment
+
+Create a Client EC2, in the same AZ as the server.
+Open the security group's postgresql port (5432)
+Install Go
 ```bash
 cd /tmp
 wget https://go.dev/dl/go1.23.2.linux-amd64.tar.gz
@@ -66,7 +77,7 @@ source ~/.bashrc
 go version
 ```
 
-## 3. Build Benchmark
+Build the Benchmark
 ```bash
 git clone https://github.com/stanislavkozlovski/postgres-queue-benchmarks.git
 cd postgres-queue-benchmarks
@@ -74,10 +85,12 @@ cd postgres-queue-benchmarks
 go build -o ./pg_queue_bench .
 chmod +x ./pg_queue_bench
 ```
-## 4. Run Benchmark
+Run the Benchmark
+
+export HOST="172.31.20.198"  # adjust to your server's private IP
 ```bash
 ./pg_queue_bench \
-  --host=localhost \
+  --host=$HOST \
   --port=5432 \
   --db=benchmark \
   --user=postgres \
