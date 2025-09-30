@@ -1,1 +1,0 @@
-c7i.xlarge; io2 40GB with 10,000 IOPS; Ubuntu 24.04

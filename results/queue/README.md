@@ -2,6 +2,15 @@
 
 A simple Go benchmark that stress-tests PostgreSQL as a queue (insert + claim rows with `FOR UPDATE SKIP LOCKED`).
 
+## Design
+
+A simple design would use a `BOOLEAN is_read` field to denote whether a field is read or not.
+In my testing, I found this lowers performance. The EXPLAIN query shows that each read query starts paying a lot of latency to filter through many pages of already `is_read=true` rows.
+Vacuum apparently takes time to prune them away, and until it does - reads are slowed.
+
+A more performant approach is to delete rows once read.
+This keeps the table small and performant. Since we don't necessarily want to omit the data (some companies have a policy of never deleting, at least before a backup) - we will move the data to another table.
+
 ---
 
 ## 1. Prepare Environment

@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
 	"database/sql"
 	"flag"
 	"fmt"
@@ -9,7 +10,6 @@ import (
 	"sync"
 	"time"
 
-	"crypto/rand"
 	_ "github.com/lib/pq"
 )
 
@@ -52,15 +52,20 @@ func NewBenchmarkRun(cfg *Config) (*BenchmarkRun, error) {
 
 func (br *BenchmarkRun) Setup() error {
 	queries := []string{
+		"DROP TABLE IF EXISTS queue_archive",
 		"DROP TABLE IF EXISTS queue",
 		`CREATE TABLE queue (
 			id BIGSERIAL PRIMARY KEY,
 			payload BYTEA NOT NULL,
-			is_read BOOLEAN NOT NULL DEFAULT FALSE,
-			created_at TIMESTAMP NOT NULL DEFAULT NOW(),
-			read_at TIMESTAMP
+			created_at TIMESTAMP NOT NULL DEFAULT NOW()
 		)`,
-		"CREATE INDEX idx_queue_unread ON queue(id) WHERE is_read = FALSE",
+		`CREATE TABLE queue_archive (
+			id BIGINT,
+			payload BYTEA NOT NULL,
+			created_at TIMESTAMP NOT NULL,
+			read_at TIMESTAMP NOT NULL DEFAULT NOW()
+		)`,
+		"CREATE INDEX idx_queue_id ON queue(id)",
 	}
 	for _, q := range queries {
 		if _, err := br.db.ExecContext(br.ctx, q); err != nil {
@@ -107,18 +112,27 @@ func (br *BenchmarkRun) Reader(id int, wg *sync.WaitGroup) {
 	defer conn.Close()
 
 	hist := br.metrics.readerHists[id]
-	const claimSQL = `
-		SELECT id, payload
+
+	// step 1: claim a row
+	const selSQL = `
+		SELECT id, payload, created_at
 		FROM queue
-		WHERE is_read = FALSE
 		ORDER BY id
 		FOR UPDATE SKIP LOCKED
 		LIMIT 1
 	`
-	selStmt, _ := conn.PrepareContext(br.ctx, claimSQL)
+	selStmt, _ := conn.PrepareContext(br.ctx, selSQL)
 	defer selStmt.Close()
-	updStmt, _ := conn.PrepareContext(br.ctx, "UPDATE queue SET is_read = TRUE, read_at = NOW() WHERE id = $1")
-	defer updStmt.Close()
+
+	// step 3a: delete
+	delStmt, _ := conn.PrepareContext(br.ctx,
+		"DELETE FROM queue WHERE id = $1")
+	defer delStmt.Close()
+
+	// step 3b: insert into archive
+	insStmt, _ := conn.PrepareContext(br.ctx,
+		"INSERT INTO queue_archive (id, payload, created_at, read_at) VALUES ($1,$2,$3,NOW())")
+	defer insStmt.Close()
 
 	for {
 		select {
@@ -131,25 +145,42 @@ func (br *BenchmarkRun) Reader(id int, wg *sync.WaitGroup) {
 				br.metrics.ReadErrors.Add(1)
 				continue
 			}
-			var id64 int64
-			var payload []byte
-			if err := tx.Stmt(selStmt).QueryRowContext(br.ctx).Scan(&id64, &payload); err != nil {
+
+			var (
+				id64    int64
+				payload []byte
+				created time.Time
+			)
+			// step 1: claim
+			if err := tx.Stmt(selStmt).QueryRowContext(br.ctx).Scan(&id64, &payload, &created); err != nil {
 				_ = tx.Rollback()
 				time.Sleep(200 * time.Microsecond)
 				continue
 			}
 
-			// SIMULATION: This is where we'd work with the &payload. Keep it empty so we don't use extra CPU in the benchmark
+			// step 2: process
+			// (simulate some work — currently just no-op)
+			_ = payload // you could hash, sleep, etc.
 
-			if _, err := tx.Stmt(updStmt).ExecContext(br.ctx, id64); err != nil {
+			// step 3a: delete
+			if _, err := tx.Stmt(delStmt).ExecContext(br.ctx, id64); err != nil {
 				_ = tx.Rollback()
 				br.metrics.ReadErrors.Add(1)
 				continue
 			}
+
+			// step 3b: insert into archive
+			if _, err := tx.Stmt(insStmt).ExecContext(br.ctx, id64, payload, created); err != nil {
+				_ = tx.Rollback()
+				br.metrics.ReadErrors.Add(1)
+				continue
+			}
+
 			if err := tx.Commit(); err != nil {
 				br.metrics.ReadErrors.Add(1)
 				continue
 			}
+
 			br.metrics.ReadsCompleted.Add(1)
 			br.metrics.UpdatesCompleted.Add(1)
 			lat := time.Since(start).Nanoseconds()
