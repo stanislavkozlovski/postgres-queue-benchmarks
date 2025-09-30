@@ -26,11 +26,12 @@ type Config struct {
 }
 
 type BenchmarkRun struct {
-	config  *Config
-	db      *sql.DB
-	metrics *Metrics
-	ctx     context.Context
-	cancel  context.CancelFunc
+	config       *Config
+	db           *sql.DB
+	metrics      *Metrics
+	ctx          context.Context
+	cancel       context.CancelFunc
+	writeLimiter *rate.Limiter // global limiter
 }
 
 func NewBenchmarkRun(cfg *Config) (*BenchmarkRun, error) {
@@ -44,12 +45,18 @@ func NewBenchmarkRun(cfg *Config) (*BenchmarkRun, error) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), cfg.Duration)
 
+	var limiter *rate.Limiter
+	if cfg.ThrottleWrites > 0 {
+		limiter = rate.NewLimiter(rate.Limit(cfg.ThrottleWrites), cfg.ThrottleWrites)
+	}
+
 	return &BenchmarkRun{
-		config:  cfg,
-		db:      db,
-		metrics: NewMetrics(cfg.Writers, cfg.Readers),
-		ctx:     ctx,
-		cancel:  cancel,
+		config:       cfg,
+		db:           db,
+		metrics:      NewMetrics(cfg.Writers, cfg.Readers),
+		ctx:          ctx,
+		cancel:       cancel,
+		writeLimiter: limiter,
 	}, nil
 }
 
@@ -90,20 +97,14 @@ func (br *BenchmarkRun) Writer(id int, wg *sync.WaitGroup) {
 	stmt, _ := conn.PrepareContext(br.ctx, "INSERT INTO queue (payload) VALUES ($1)")
 	defer stmt.Close()
 
-	// set up rate limiter if configured
-	var limiter *rate.Limiter
-	if br.config.ThrottleWrites > 0 {
-		limiter = rate.NewLimiter(rate.Limit(br.config.ThrottleWrites), br.config.ThrottleWrites)
-	}
-
 	for {
 		select {
 		case <-br.ctx.Done():
 			return
 		default:
-			// throttle if limiter active
-			if limiter != nil {
-				if err := limiter.Wait(br.ctx); err != nil {
+			// throttle globally
+			if br.writeLimiter != nil {
+				if err := br.writeLimiter.Wait(br.ctx); err != nil {
 					return
 				}
 			}
@@ -171,9 +172,8 @@ func (br *BenchmarkRun) Reader(id int, wg *sync.WaitGroup) {
 				continue
 			}
 
-			// step 2: process
-			// (simulate some work — currently just no-op)
-			_ = payload // you could hash, sleep, etc.
+			// step 2: process (noop here)
+			_ = payload
 
 			// step 3a: delete
 			if _, err := tx.Stmt(delStmt).ExecContext(br.ctx, id64); err != nil {
@@ -266,3 +266,4 @@ func main() {
 	_ = br.db.Close()
 	log.Println("benchmark complete")
 }
+
