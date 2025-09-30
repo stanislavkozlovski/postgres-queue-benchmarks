@@ -1,149 +1,163 @@
-
-![4vcpu_htop_screen.png](./4vcpu_htop_screen.png) for more details.
-
+The main problem here is that writes outpace reads by a ton, so the system perpetually accumulates backlog.
 
 # Run 1:
 
 ```bash
-ubuntu@ip-172-31-23-223:/tmp/postgres-queue-benchmarks$ ./pg_queue_bench   --host=$HOST   --port=5432   --db=benchmark   --user=postgres   --password=postgres   --writers=50   --readers=50   --duration=120s   --payload=1024   --report=5s
-[12:37:40] W: 13444/s R: 4296/s QDepth: 45742 Err(W/R): 0/0
-[12:37:45] W: 13994/s R: 4065/s QDepth: 95389 Err(W/R): 0/0
-[12:37:50] W: 13213/s R: 3736/s QDepth: 142775 Err(W/R): 0/0
-[12:37:55] W: 13225/s R: 3551/s QDepth: 191145 Err(W/R): 0/0
-[12:38:00] W: 12752/s R: 3351/s QDepth: 238149 Err(W/R): 0/0
-[12:38:05] W: 12596/s R: 3148/s QDepth: 285387 Err(W/R): 0/0
-[12:38:10] W: 11860/s R: 3035/s QDepth: 329512 Err(W/R): 0/0
-[12:38:15] W: 11886/s R: 2948/s QDepth: 374201 Err(W/R): 0/0
-[12:38:20] W: 13049/s R: 2654/s QDepth: 426172 Err(W/R): 0/0
-[12:38:25] W: 13058/s R: 3523/s QDepth: 473845 Err(W/R): 0/0
-[12:38:30] W: 12349/s R: 3339/s QDepth: 518897 Err(W/R): 0/0
-[12:38:35] W: 9232/s R: 1419/s QDepth: 557963 Err(W/R): 0/0
-[12:38:40] W: 8687/s R: 834/s QDepth: 597229 Err(W/R): 0/0
-[12:38:45] W: 7078/s R: 685/s QDepth: 629198 Err(W/R): 0/0
-[12:38:50] W: 7116/s R: 584/s QDepth: 661856 Err(W/R): 0/0
-[12:38:55] W: 6973/s R: 517/s QDepth: 694133 Err(W/R): 0/0
-[12:39:00] W: 6224/s R: 579/s QDepth: 722359 Err(W/R): 0/0
-[12:39:05] W: 11045/s R: 2527/s QDepth: 764948 Err(W/R): 0/0
-[12:39:10] W: 12520/s R: 2944/s QDepth: 812828 Err(W/R): 0/0
-[12:39:15] W: 12286/s R: 2848/s QDepth: 860016 Err(W/R): 0/0
-[12:39:20] W: 11700/s R: 2748/s QDepth: 904775 Err(W/R): 0/0
-[12:39:25] W: 11682/s R: 2616/s QDepth: 950104 Err(W/R): 0/0
-[12:39:30] W: 11019/s R: 2606/s QDepth: 992169 Err(W/R): 0/0
+ubuntu@ip-172-31-23-223:/tmp/postgres-queue-benchmarks$ for i in {1..3}; do ./pg_queue_bench --host=$HOST --port=5432 --db=benchmark --user=postgres --password=postgres --writers=50 --readers=50 --duration=120s --payload=1024 --report=5s; [ $i -lt 3 ] && sleep 120; done
+[13:50:26] W: 13288/s R: 4365/s QDepth: 44616 Err(W/R): 0/0
+[13:50:31] W: 13939/s R: 4059/s QDepth: 94016 Err(W/R): 0/0
+[13:50:36] W: 13498/s R: 3632/s QDepth: 143346 Err(W/R): 0/0
+[13:50:41] W: 13072/s R: 3574/s QDepth: 190837 Err(W/R): 0/0
+[13:50:46] W: 13090/s R: 3376/s QDepth: 239406 Err(W/R): 0/0
+[13:50:51] W: 12757/s R: 3222/s QDepth: 287080 Err(W/R): 0/0
+[13:50:56] W: 13105/s R: 3095/s QDepth: 337132 Err(W/R): 0/0
+[13:51:01] W: 12631/s R: 2980/s QDepth: 385389 Err(W/R): 0/0
+[13:51:06] W: 12829/s R: 2846/s QDepth: 435305 Err(W/R): 0/0
+[13:51:11] W: 12613/s R: 2758/s QDepth: 484583 Err(W/R): 0/0
+[13:51:16] W: 11747/s R: 2711/s QDepth: 529764 Err(W/R): 0/0
+[13:51:21] W: 12059/s R: 2605/s QDepth: 577034 Err(W/R): 0/0
+[13:51:26] W: 11882/s R: 2513/s QDepth: 623881 Err(W/R): 0/0
+[13:51:31] W: 11362/s R: 2451/s QDepth: 668436 Err(W/R): 0/0
+[13:51:36] W: 11640/s R: 2380/s QDepth: 714735 Err(W/R): 0/0
+[13:51:41] W: 11359/s R: 2319/s QDepth: 759940 Err(W/R): 0/0
+[13:51:46] W: 11271/s R: 2288/s QDepth: 804852 Err(W/R): 0/0
+[13:51:51] W: 11318/s R: 2221/s QDepth: 850338 Err(W/R): 0/0
+[13:51:56] W: 10607/s R: 2175/s QDepth: 892498 Err(W/R): 0/0
+[13:52:01] W: 10552/s R: 2141/s QDepth: 934551 Err(W/R): 0/0
+[13:52:06] W: 10257/s R: 2096/s QDepth: 975358 Err(W/R): 0/0
+[13:52:11] W: 12652/s R: 2761/s QDepth: 1024813 Err(W/R): 0/0
+[13:52:16] W: 12428/s R: 3038/s QDepth: 1071763 Err(W/R): 0/0
 
 === Summary ===
-Total Writes: 1341944
-Total Reads: 305180
-Total Updates: 305180
+Total Writes: 1459712
+Total Reads: 341822
+Total Updates: 341822
 Write Errors: 0
-Read Errors: 6
-Avg Write Throughput: 11182.87 rows/sec
-Avg Read Throughput: 2543.17 rows/sec
+Read Errors: 26
+Avg Write Throughput: 12164.27 rows/sec
+Avg Read Throughput: 2848.52 rows/sec
+2025/09/30 13:52:22 [merge] dropped 78583 values outside histogram range
 
-Write Latencies:
-  P50: 3.201023ms
-  P95: 11.149311ms
-  P99: 26.296319ms
+Write Latencies (INSERT only):
+  P50: 3.129343ms
+  P95: 9.420799ms
+  P99: 23.347199ms
 
-Read Latencies:
-  P50: 14.966783ms
-  P95: 53.870591ms
-  P99: 100.335615ms
+Read Latencies (txn: SELECT+DELETE+INSERT):
+  P50: 15.859711ms
+  P95: 31.522815ms
+  P99: 47.218687ms
 
-2025/09/30 12:39:35 benchmark complete
+End-to-End Latencies (created_at → consumed):
+  P50: 26.977763327s
+  P95: 1m3.954747391s
+  P99: 1m7.779952639s
+
+2025/09/30 13:52:22 benchmark complete
 ```
 # Run 2
 ```bash
-ubuntu@ip-172-31-23-223:/tmp/postgres-queue-benchmarks$ ./pg_queue_bench   --host=$HOST   --port=5432   --db=benchmark   --user=postgres   --password=postgres   --writers=50   --readers=50   --duration=120s   --payload=1024   --report=5s
-[12:40:08] W: 14031/s R: 4298/s QDepth: 48665 Err(W/R): 0/0
-[12:40:13] W: 14627/s R: 4018/s QDepth: 101708 Err(W/R): 0/0
-[12:40:18] W: 13690/s R: 3708/s QDepth: 151616 Err(W/R): 0/0
-[12:40:23] W: 13740/s R: 3506/s QDepth: 202787 Err(W/R): 0/0
-[12:40:28] W: 13505/s R: 3312/s QDepth: 253751 Err(W/R): 0/0
-[12:40:33] W: 13812/s R: 3127/s QDepth: 307179 Err(W/R): 0/0
-[12:40:38] W: 12589/s R: 3050/s QDepth: 354883 Err(W/R): 0/0
-[12:40:43] W: 8287/s R: 1135/s QDepth: 390640 Err(W/R): 0/0
-[12:40:48] W: 7398/s R: 792/s QDepth: 423671 Err(W/R): 0/0
-[12:40:53] W: 10793/s R: 2043/s QDepth: 467421 Err(W/R): 0/0
-[12:40:58] W: 13309/s R: 3293/s QDepth: 517500 Err(W/R): 0/0
-[12:41:03] W: 11118/s R: 2418/s QDepth: 561001 Err(W/R): 0/0
-[12:41:08] W: 12627/s R: 3065/s QDepth: 608808 Err(W/R): 0/0
-[12:41:13] W: 12835/s R: 2948/s QDepth: 658244 Err(W/R): 0/0
-[12:41:18] W: 12642/s R: 2834/s QDepth: 707289 Err(W/R): 0/0
-[12:41:23] W: 12450/s R: 2705/s QDepth: 756015 Err(W/R): 0/0
-[12:41:28] W: 12656/s R: 2598/s QDepth: 806304 Err(W/R): 0/0
-[12:41:33] W: 12377/s R: 2509/s QDepth: 855646 Err(W/R): 0/0
-[12:41:38] W: 11618/s R: 2496/s QDepth: 901259 Err(W/R): 0/0
-[12:41:43] W: 11773/s R: 2413/s QDepth: 948060 Err(W/R): 0/0
-[12:41:48] W: 12081/s R: 2343/s QDepth: 996751 Err(W/R): 0/0
-[12:41:53] W: 11378/s R: 2323/s QDepth: 1042026 Err(W/R): 0/0
-[12:41:58] W: 11192/s R: 2248/s QDepth: 1086746 Err(W/R): 0/0
+[13:54:27] W: 14918/s R: 4268/s QDepth: 53247 Err(W/R): 0/0
+[13:54:32] W: 14355/s R: 4061/s QDepth: 104717 Err(W/R): 0/0
+[13:54:37] W: 14352/s R: 3592/s QDepth: 158514 Err(W/R): 0/0
+[13:54:42] W: 13690/s R: 3539/s QDepth: 209271 Err(W/R): 0/0
+[13:54:47] W: 12957/s R: 3406/s QDepth: 257026 Err(W/R): 0/0
+[13:54:52] W: 13189/s R: 3226/s QDepth: 306843 Err(W/R): 0/0
+[13:54:57] W: 12602/s R: 3098/s QDepth: 354363 Err(W/R): 0/0
+[13:55:02] W: 13005/s R: 2966/s QDepth: 404560 Err(W/R): 0/0
+[13:55:07] W: 12524/s R: 2887/s QDepth: 452744 Err(W/R): 0/0
+[13:55:12] W: 12483/s R: 2775/s QDepth: 501286 Err(W/R): 0/0
+[13:55:17] W: 12363/s R: 2706/s QDepth: 549572 Err(W/R): 0/0
+[13:55:22] W: 12483/s R: 2580/s QDepth: 599089 Err(W/R): 0/0
+[13:55:27] W: 11657/s R: 2521/s QDepth: 644769 Err(W/R): 0/0
+[13:55:32] W: 11725/s R: 2443/s QDepth: 691177 Err(W/R): 0/0
+[13:55:37] W: 11876/s R: 2386/s QDepth: 738629 Err(W/R): 0/0
+[13:55:42] W: 12008/s R: 2298/s QDepth: 787176 Err(W/R): 0/0
+[13:55:47] W: 11483/s R: 2273/s QDepth: 833230 Err(W/R): 0/0
+[13:55:52] W: 11537/s R: 2231/s QDepth: 879759 Err(W/R): 0/0
+[13:55:57] W: 11420/s R: 2176/s QDepth: 925978 Err(W/R): 0/0
+[13:56:02] W: 11405/s R: 2141/s QDepth: 972300 Err(W/R): 0/0
+[13:56:07] W: 11106/s R: 2094/s QDepth: 1017359 Err(W/R): 0/0
+[13:56:12] W: 13411/s R: 2683/s QDepth: 1070997 Err(W/R): 0/0
+[13:56:17] W: 13316/s R: 3025/s QDepth: 1122451 Err(W/R): 0/0
 
 === Summary ===
-Total Writes: 1447305
-Total Reads: 324410
-Total Updates: 324410
+Total Writes: 1510928
+Total Reads: 340934
+Total Updates: 340934
 Write Errors: 0
-Read Errors: 25
-Avg Write Throughput: 12060.88 rows/sec
-Avg Read Throughput: 2703.42 rows/sec
+Read Errors: 23
+Avg Write Throughput: 12591.07 rows/sec
+Avg Read Throughput: 2841.12 rows/sec
+2025/09/30 13:56:22 [merge] dropped 82228 values outside histogram range
 
-Write Latencies:
-  P50: 3.096575ms
-  P95: 9.748479ms
-  P99: 22.806527ms
+Write Latencies (INSERT only):
+  P50: 2.985983ms
+  P95: 9.199615ms
+  P99: 23.085055ms
 
-Read Latencies:
-  P50: 15.654911ms
-  P95: 36.077567ms
-  P99: 69.140479ms
+Read Latencies (txn: SELECT+DELETE+INSERT):
+  P50: 15.908863ms
+  P95: 31.752191ms
+  P99: 48.201727ms
 
-2025/09/30 12:42:02 benchmark complete
+End-to-End Latencies (created_at → consumed):
+  P50: 27.430748159s
+  P95: 1m3.921192959s
+  P99: 1m7.746398207s
+
+2025/09/30 13:56:22 benchmark complete
 ```
 # Run 3
 ```bash
-ubuntu@ip-172-31-23-223:/tmp/postgres-queue-benchmarks$ ./pg_queue_bench   --host=$HOST   --port=5432   --db=benchmark   --user=postgres   --password=postgres   --writers=50   --readers=50   --duration=120s   --payload=1024   --report=5s
-[12:42:18] W: 13912/s R: 4321/s QDepth: 47957 Err(W/R): 0/0
-[12:42:23] W: 14022/s R: 3781/s QDepth: 99162 Err(W/R): 0/0
-[12:42:28] W: 14164/s R: 3895/s QDepth: 150505 Err(W/R): 0/0
-[12:42:33] W: 13553/s R: 3916/s QDepth: 198690 Err(W/R): 0/0
-[12:42:38] W: 13781/s R: 3648/s QDepth: 249353 Err(W/R): 0/0
-[12:42:43] W: 13473/s R: 3445/s QDepth: 299491 Err(W/R): 0/0
-[12:42:48] W: 12906/s R: 3283/s QDepth: 347609 Err(W/R): 0/0
-[12:42:53] W: 12571/s R: 3135/s QDepth: 394787 Err(W/R): 0/0
-[12:42:58] W: 13082/s R: 2978/s QDepth: 445308 Err(W/R): 0/0
-[12:43:03] W: 12469/s R: 2903/s QDepth: 493137 Err(W/R): 0/0
-[12:43:08] W: 12188/s R: 2807/s QDepth: 540041 Err(W/R): 0/0
-[12:43:13] W: 12639/s R: 2676/s QDepth: 589857 Err(W/R): 0/0
-[12:43:18] W: 12403/s R: 2599/s QDepth: 638877 Err(W/R): 0/0
-[12:43:23] W: 12007/s R: 2513/s QDepth: 686347 Err(W/R): 0/0
-[12:43:28] W: 11873/s R: 2437/s QDepth: 733524 Err(W/R): 0/0
-[12:43:33] W: 12048/s R: 2368/s QDepth: 781927 Err(W/R): 0/0
-[12:43:38] W: 11920/s R: 2314/s QDepth: 829960 Err(W/R): 0/0
-[12:43:43] W: 11154/s R: 2270/s QDepth: 874377 Err(W/R): 0/0
-[12:43:48] W: 11266/s R: 2218/s QDepth: 919619 Err(W/R): 0/0
-[12:43:53] W: 11056/s R: 2192/s QDepth: 963940 Err(W/R): 0/0
-[12:43:58] W: 11021/s R: 2132/s QDepth: 1008385 Err(W/R): 0/0
-[12:44:03] W: 10984/s R: 2091/s QDepth: 1052853 Err(W/R): 0/0
-[12:44:08] W: 10547/s R: 2065/s QDepth: 1095266 Err(W/R): 0/0
+[13:58:27] W: 13167/s R: 4422/s QDepth: 43727 Err(W/R): 0/0
+[13:58:32] W: 14246/s R: 4094/s QDepth: 94487 Err(W/R): 0/0
+[13:58:37] W: 14293/s R: 3516/s QDepth: 148371 Err(W/R): 0/0
+[13:58:42] W: 13625/s R: 3606/s QDepth: 198465 Err(W/R): 0/0
+[13:58:47] W: 13119/s R: 3434/s QDepth: 246894 Err(W/R): 0/0
+[13:58:52] W: 13279/s R: 3252/s QDepth: 297027 Err(W/R): 0/0
+[13:58:57] W: 12833/s R: 3092/s QDepth: 345732 Err(W/R): 0/0
+[13:59:02] W: 12727/s R: 2980/s QDepth: 394466 Err(W/R): 0/0
+[13:59:07] W: 12490/s R: 2870/s QDepth: 442566 Err(W/R): 0/0
+[13:59:12] W: 12549/s R: 2772/s QDepth: 491453 Err(W/R): 0/0
+[13:59:17] W: 12479/s R: 2679/s QDepth: 540453 Err(W/R): 0/0
+[13:59:22] W: 12337/s R: 2578/s QDepth: 589250 Err(W/R): 0/0
+[13:59:27] W: 12152/s R: 2502/s QDepth: 637500 Err(W/R): 0/0
+[13:59:32] W: 11834/s R: 2439/s QDepth: 684473 Err(W/R): 0/0
+[13:59:37] W: 11734/s R: 2366/s QDepth: 731312 Err(W/R): 0/0
+[13:59:42] W: 11952/s R: 2289/s QDepth: 779626 Err(W/R): 0/0
+[13:59:47] W: 11929/s R: 2243/s QDepth: 828054 Err(W/R): 0/0
+[13:59:52] W: 11637/s R: 2220/s QDepth: 875138 Err(W/R): 0/0
+[13:59:57] W: 11156/s R: 2183/s QDepth: 920005 Err(W/R): 0/0
+[14:00:02] W: 11284/s R: 2134/s QDepth: 965756 Err(W/R): 0/0
+[14:00:07] W: 11146/s R: 2082/s QDepth: 1011077 Err(W/R): 0/0
+[14:00:12] W: 13002/s R: 2842/s QDepth: 1061876 Err(W/R): 0/0
+[14:00:17] W: 13259/s R: 3009/s QDepth: 1113127 Err(W/R): 0/0
 
 === Summary ===
-Total Writes: 1471892
-Total Reads: 338139
-Total Updates: 338139
+Total Writes: 1504545
+Total Reads: 342219
+Total Updates: 342219
 Write Errors: 0
-Read Errors: 10
-Avg Write Throughput: 12265.77 rows/sec
-Avg Read Throughput: 2817.82 rows/sec
+Read Errors: 21
+Avg Write Throughput: 12537.88 rows/sec
+Avg Read Throughput: 2851.82 rows/sec
+2025/09/30 14:00:22 [merge] dropped 80771 values outside histogram range
 
-Write Latencies:
-  P50: 3.059711ms
-  P95: 9.437183ms
-  P99: 22.724607ms
+Write Latencies (INSERT only):
+  P50: 3.008511ms
+  P95: 9.297919ms
+  P99: 23.117823ms
 
-Read Latencies:
-  P50: 15.728639ms
-  P95: 31.899647ms
-  P99: 48.955391ms
+Read Latencies (txn: SELECT+DELETE+INSERT):
+  P50: 15.818751ms
+  P95: 31.621119ms
+  P99: 47.710207ms
 
-2025/09/30 12:44:12 benchmark complete
+End-to-End Latencies (created_at → consumed):
+  P50: 26.625441791s
+  P95: 1m3.854084095s
+  P99: 1m7.712843775s
+
+2025/09/30 14:00:22 benchmark complete
 ```
