@@ -10,6 +10,8 @@ import (
 	"sync"
 	"time"
 
+	"golang.org/x/time/rate"
+
 	_ "github.com/lib/pq"
 )
 
@@ -20,6 +22,7 @@ type Config struct {
 	Duration       time.Duration
 	PayloadSize    int
 	ReportInterval time.Duration
+	ThrottleWrites int // rows/sec, 0 = unlimited
 }
 
 type BenchmarkRun struct {
@@ -87,11 +90,24 @@ func (br *BenchmarkRun) Writer(id int, wg *sync.WaitGroup) {
 	stmt, _ := conn.PrepareContext(br.ctx, "INSERT INTO queue (payload) VALUES ($1)")
 	defer stmt.Close()
 
+	// set up rate limiter if configured
+	var limiter *rate.Limiter
+	if br.config.ThrottleWrites > 0 {
+		limiter = rate.NewLimiter(rate.Limit(br.config.ThrottleWrites), br.config.ThrottleWrites)
+	}
+
 	for {
 		select {
 		case <-br.ctx.Done():
 			return
 		default:
+			// throttle if limiter active
+			if limiter != nil {
+				if err := limiter.Wait(br.ctx); err != nil {
+					return
+				}
+			}
+
 			start := time.Now()
 			if _, err := stmt.ExecContext(br.ctx, payload); err != nil {
 				br.metrics.WriteErrors.Add(1)
@@ -113,7 +129,6 @@ func (br *BenchmarkRun) Reader(id int, wg *sync.WaitGroup) {
 
 	hist := br.metrics.readerHists[id]
 
-	// step 1: claim a row
 	const selSQL = `
 		SELECT id, payload, created_at
 		FROM queue
@@ -124,12 +139,10 @@ func (br *BenchmarkRun) Reader(id int, wg *sync.WaitGroup) {
 	selStmt, _ := conn.PrepareContext(br.ctx, selSQL)
 	defer selStmt.Close()
 
-	// step 3a: delete
 	delStmt, _ := conn.PrepareContext(br.ctx,
 		"DELETE FROM queue WHERE id = $1")
 	defer delStmt.Close()
 
-	// step 3b: insert into archive
 	insStmt, _ := conn.PrepareContext(br.ctx,
 		"INSERT INTO queue_archive (id, payload, created_at, read_at) VALUES ($1,$2,$3,NOW())")
 	defer insStmt.Close()
@@ -151,7 +164,7 @@ func (br *BenchmarkRun) Reader(id int, wg *sync.WaitGroup) {
 				payload []byte
 				created time.Time
 			)
-			// step 1: claim
+			// step 1: read + claim the row
 			if err := tx.Stmt(selStmt).QueryRowContext(br.ctx).Scan(&id64, &payload, &created); err != nil {
 				_ = tx.Rollback()
 				time.Sleep(200 * time.Microsecond)
@@ -168,7 +181,6 @@ func (br *BenchmarkRun) Reader(id int, wg *sync.WaitGroup) {
 				br.metrics.ReadErrors.Add(1)
 				continue
 			}
-
 			// step 3b: insert into archive
 			if _, err := tx.Stmt(insStmt).ExecContext(br.ctx, id64, payload, created); err != nil {
 				_ = tx.Rollback()
@@ -217,11 +229,12 @@ func main() {
 		user   = flag.String("user", "postgres", "Database user")
 		pass   = flag.String("password", "", "Database password")
 
-		writers     = flag.Int("writers", 4, "Number of writers")
-		readers     = flag.Int("readers", 4, "Number of readers")
-		duration    = flag.Duration("duration", 30*time.Second, "Test duration")
-		payload     = flag.Int("payload", 1024, "Payload size in bytes")
-		reportEvery = flag.Duration("report", 5*time.Second, "Report interval")
+		writers        = flag.Int("writers", 4, "Number of writers")
+		readers        = flag.Int("readers", 4, "Number of readers")
+		duration       = flag.Duration("duration", 30*time.Second, "Test duration")
+		payload        = flag.Int("payload", 1024, "Payload size in bytes")
+		reportEvery    = flag.Duration("report", 5*time.Second, "Report interval")
+		throttleWrites = flag.Int("throttle_writes", 0, "Throttle writer rows/sec (0=unlimited)")
 	)
 	flag.Parse()
 
@@ -238,6 +251,7 @@ func main() {
 		Duration:       *duration,
 		PayloadSize:    *payload,
 		ReportInterval: *reportEvery,
+		ThrottleWrites: *throttleWrites,
 	}
 
 	br, err := NewBenchmarkRun(cfg)
