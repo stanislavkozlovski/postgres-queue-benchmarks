@@ -1,4 +1,4 @@
-package postgres_queue_benchmarks
+package main
 
 import (
 	"sync/atomic"

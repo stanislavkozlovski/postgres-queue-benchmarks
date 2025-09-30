@@ -1,0 +1,94 @@
+# Postgres Queue Benchmarks
+
+A simple Go benchmark that stress-tests PostgreSQL as a queue (insert + claim rows with `FOR UPDATE SKIP LOCKED`).
+
+---
+
+## 1. Prepare Environment
+
+```bash
+### Mount fast volume for PostgreSQL data
+DEV=/dev/nvme1n1    # adjust if lsblk shows a different device
+MNT=/pgdata
+
+sudo mkfs.xfs -f $DEV
+sudo mkdir -p $MNT
+sudo mount $DEV $MNT
+
+sudo mkdir -p $MNT/pg17
+sudo chown -R postgres:postgres /pgdata/pg17
+sudo chmod 700 /pgdata/pg17
+# persist mount
+UUID=$(sudo blkid -s UUID -o value $DEV)
+echo "UUID=$UUID $MNT xfs defaults,nofail 0 2" | sudo tee -a /etc/fstab
+
+
+### Install PostgreSQL 17 (PGDG repo)
+sudo apt-get update -y
+sudo apt-get install -y curl ca-certificates gnupg lsb-release
+curl https://www.postgresql.org/media/keys/ACCC4CF8.asc | \
+  gpg --dearmor | sudo tee /etc/apt/trusted.gpg.d/pgdg.gpg >/dev/null
+echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" | \
+  sudo tee /etc/apt/sources.list.d/pgdg.list
+
+sudo apt-get update -y
+sudo apt-get install -y postgresql-17 postgresql-client-17 postgresql-common
+
+
+### Create cluster on mounted volume
+sudo pg_dropcluster --stop 17 main
+sudo pg_createcluster 17 main --datadir=$MNT/pg17 --port=5432
+pg_lsclusters
+
+
+### Configure database
+sudo -u postgres createdb benchmark
+sudo -u postgres psql -c "ALTER USER postgres WITH PASSWORD 'postgres';"
+```
+## 2. Install Go
+
+```bash
+cd /tmp
+wget https://go.dev/dl/go1.23.2.linux-amd64.tar.gz
+sudo rm -rf /usr/local/go
+sudo tar -C /usr/local -xzf go1.23.2.linux-amd64.tar.gz
+echo 'export PATH=$PATH:/usr/local/go/bin' >> ~/.bashrc
+source ~/.bashrc
+go version
+```
+
+## 3. Build Benchmark
+```bash
+git clone https://github.com/stanislavkozlovski/postgres-queue-benchmarks.git
+cd postgres-queue-benchmarks
+
+go build -o ./pg_queue_bench .
+chmod +x ./pg_queue_bench
+```
+## 4. Run Benchmark
+```bash
+./pg_queue_bench \
+  --host=localhost \
+  --port=5432 \
+  --db=benchmark \
+  --user=postgres \
+  --password=postgres \
+  --writers=50 \
+  --readers=50 \
+  --duration=120s \
+  --payload=1024 \
+  --report=5s
+```
+
+**Flags**
+
+- `--host` – PostgreSQL host (default `localhost`)
+- `--port` – PostgreSQL port (default `5432`)
+- `--db` – database name (default `benchmark`)
+- `--user` – database user (default `postgres`)
+- `--password` – password for user
+- `--writers` – number of concurrent writer goroutines
+- `--readers` – number of concurrent reader goroutines
+- `--duration` – test duration (e.g. `120s`)
+- `--payload` – payload size in bytes (default `1024`)
+- `--report` – report interval (default `5s`)
