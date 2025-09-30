@@ -28,13 +28,13 @@ func NewMetrics(writers, readers int) *Metrics {
 		readerE2EHists:  make([]*hdrhistogram.Histogram, readers),
 	}
 	for i := range m.writerHists {
-		m.writerHists[i] = hdrhistogram.New(1, int64(10e9), 3) // 1ns–10s
+		m.readerE2EHists[i] = hdrhistogram.New(1, int64(600e9), 3)
 	}
 	for i := range m.readerReadHists {
-		m.readerReadHists[i] = hdrhistogram.New(1, int64(10e9), 3)
+		m.readerE2EHists[i] = hdrhistogram.New(1, int64(600e9), 3)
 	}
 	for i := range m.readerE2EHists {
-		m.readerE2EHists[i] = hdrhistogram.New(1, int64(10e9), 3)
+		m.readerE2EHists[i] = hdrhistogram.New(1, int64(600e9), 3)
 	}
 	return m
 }
