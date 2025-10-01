@@ -23,5 +23,3 @@ LIMIT 1;
 The select statement is pretty healthy.
 ChatGPT is suggesting the WAL may be the bottleneck here, as each txn consists of a lot of operations
 ```
-
-```

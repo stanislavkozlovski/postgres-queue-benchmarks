@@ -7,8 +7,4 @@ vm.swappiness = 1
 EOF
 
 sudo sysctl -p /etc/sysctl.d/99-postgres.conf
-
-
 ```
-
-
