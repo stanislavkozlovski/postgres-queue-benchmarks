@@ -1,0 +1,10 @@
+```
+sudo tee /etc/sysctl.d/99-postgres.conf <<'EOF'
+# Postgres-friendly VM tuning for io2 NVMe
+vm.dirty_background_bytes = 67108864   # 64MB
+vm.dirty_bytes = 268435456             # 256MB
+vm.swappiness = 1
+EOF
+
+sudo sysctl -p /etc/sysctl.d/99-postgres.conf
+```
