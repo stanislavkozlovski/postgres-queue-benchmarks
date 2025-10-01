@@ -103,8 +103,7 @@ export HOST="172.31.18.113"  # adjust to your server's private IP
   --readers=50 \
   --duration=120s \
   --payload=1024 \
-  --report=5s \
-  --
+  --report=5s
 ```
 
 **Flags**
@@ -119,3 +118,5 @@ export HOST="172.31.18.113"  # adjust to your server's private IP
 - `--duration` – test duration (e.g. `120s`)
 - `--payload` – payload size in bytes (default `1024`)
 - `--report` – report interval (default `5s`)
+- `--throttle_writes` – throttle writer rows/sec (`0` = unlimited, default `0`)
+- `--tune-table-vacuum` – apply aggressive autovacuum/fillfactor settings to the `queue` table (default `false`)

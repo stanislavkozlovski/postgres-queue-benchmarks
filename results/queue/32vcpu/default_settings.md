@@ -1,6 +1,6 @@
 ```bash
 ./pg_queue_bench   --host=$HOST   --port=5432   --db=benchmark
-   --user=postgres   --password=postgres   --writers=40   --readers=40   --duration=120s   --payload=1024   --report=5s --throttle_writes 
+   --user=postgres   --password=postgres   --writers=50   --readers=50   --duration=120s   --payload=1024   --report=5s --throttle_writes 
 13000
 ```
 
@@ -8,24 +8,6 @@
 
 # Run 1
 ```bash
-[16:23:07] W: 15601/s R: 15303/s QDepth: 1491 Err(W/R): 0/0
-[16:23:12] W: 13006/s R: 13298/s QDepth: 31 Err(W/R): 0/0
-[16:23:17] W: 13005/s R: 13006/s QDepth: 27 Err(W/R): 0/0
-[16:23:22] W: 13004/s R: 13003/s QDepth: 36 Err(W/R): 0/0
-[16:23:27] W: 13008/s R: 13008/s QDepth: 33 Err(W/R): 0/0
-[16:23:32] W: 13003/s R: 13004/s QDepth: 31 Err(W/R): 0/0
-[16:23:37] W: 13001/s R: 13000/s QDepth: 38 Err(W/R): 0/0
-[16:23:42] W: 13002/s R: 13003/s QDepth: 31 Err(W/R): 0/0
-[16:23:47] W: 13002/s R: 13002/s QDepth: 32 Err(W/R): 0/0
-[16:23:52] W: 13002/s R: 13002/s QDepth: 32 Err(W/R): 0/0
-[16:23:57] W: 13002/s R: 13002/s QDepth: 34 Err(W/R): 0/0
-^[[A^C
-ubuntu@ip-172-31-23-223:/tmp/postgres-queue-benchmarks$ ^C
-ubuntu@ip-172-31-23-223:/tmp/postgres-queue-benchmarks$ ^C
-ubuntu@ip-172-31-23-223:/tmp/postgres-queue-benchmarks$ ^C
-ubuntu@ip-172-31-23-223:/tmp/postgres-queue-benchmarks$ ^C
-ubuntu@ip-172-31-23-223:/tmp/postgres-queue-benchmarks$ for i in {1..3}; do ./pg_queue_bench   --host=$HOST   --port=5432   --db=benchmark   --user=postgres   --password=postgres   --writers=50   --readers=50   --duration=120s   --payload=1024   --report=5s --throttle_writes
-13000; [ $i -lt 3 ] && sleep 120; done
 [16:24:14] W: 15605/s R: 15598/s QDepth: 36 Err(W/R): 0/0
 [16:24:19] W: 13005/s R: 13006/s QDepth: 30 Err(W/R): 0/0
 [16:24:24] W: 13002/s R: 13002/s QDepth: 28 Err(W/R): 0/0

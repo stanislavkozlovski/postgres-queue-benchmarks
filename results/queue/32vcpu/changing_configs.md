@@ -1,4 +1,9 @@
-Create a bash file
+# 1. Comment out default postgres settings
+
+Create a bash file:
+```bash
+vi comment_out.sh
+```
 ```bash
 #!/bin/bash
 CONF="/etc/postgresql/17/main/postgresql.conf"
@@ -46,23 +51,29 @@ chmod +x comment_out.sh
 ./comment_out.sh 
 ```
 
-Paste the [modified postgresql config](./modified_postgresql.conf) into `conf.d`:
+# 2. Paste the [modified postgresql config](./modified_postgresql.conf) into a file in `conf.d`:
 ```bash
-   77  vi /etc/postgresql/17/main/conf.d/99-custom.conf
+vi /etc/postgresql/17/main/conf.d/99-custom.conf
+# paste
 ```
 
-Restart PG
+# 3. Restart PG
 ```bash
 sudo systemctl reload postgresql@17-main
 ```
 
 
 
-Check if settings are present
+# 4. Check if settings are present
 ```bash
 # psql into machine
 SHOW shared_buffers;
 ```
+
+# 5. Modify [kernel settings](./kernel_settings)
+
+
+# 6. Run the test
 
 Run the test with the new tune table vacuum flag
 ```

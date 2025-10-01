@@ -39,6 +39,8 @@ I talked to ChatGPT a ton and it gave me the following configs:
 - [postgres config](./modified_postgresql.conf) - it suggested I substantially increase some settings like `shared_buffers` and `max_worker_processes`.
 - `queue` [table-specific vacuum settings](./table_vacuum_tuning.md) - it suggested more aggressive vacuuming for the `queue` table
 
+See how I change the configs here: [changing_configs.md](./changing_configs.md)
+
 This got me to ~16 MB/s, but I wasn't able to push further despite server CPU being low.
 The next bottleneck was the **clients**! Postgres' average read latency was ~3ms, and I had 50 reader clients. Each client therefore can't sequentially execute more than 333 reads a second.
 Collectively they can't pass 16650 req/s - ~16 MiB/s.
