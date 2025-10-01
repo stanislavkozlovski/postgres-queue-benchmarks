@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"flag"
 	"fmt"
+	_ "github.com/lib/pq" // needed for the postgres driver. imported for side effects
 	"golang.org/x/time/rate"
 	"log"
 	"time"
