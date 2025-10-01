@@ -17,14 +17,14 @@ type BaselineConfig struct {
 
 type BenchmarkRun struct {
 	Db           *sql.DB
-	Metrics      *QueueMetrics
+	Metrics      *BaseMetrics
 	Ctx          context.Context
 	WriteLimiter *rate.Limiter // global limiter
 }
 
 func NewBenchmarkRun(
 	db *sql.DB,
-	metrics *QueueMetrics,
+	metrics *BaseMetrics,
 	ctx context.Context,
 	writeLimiter *rate.Limiter,
 ) *BenchmarkRun {

@@ -95,9 +95,9 @@ func (br *QueueBenchmarkRun) Writer(id int, wg *sync.WaitGroup) {
 
 			start := time.Now()
 			if _, err := stmt.ExecContext(br.Ctx, payload); err != nil {
-				br.Metrics.WriteErrors.Add(1)
+				br.Metrics.AggregateWriteErrors.Add(1)
 			} else {
-				br.Metrics.WritesCompleted.Add(1)
+				br.Metrics.AggregateWritesCompleted.Add(1)
 			}
 			lat := time.Since(start).Nanoseconds()
 			if err := hist.RecordValue(lat); err != nil {
@@ -141,7 +141,7 @@ func (br *QueueBenchmarkRun) Reader(id int, wg *sync.WaitGroup) {
 			start := time.Now()
 			tx, err := conn.BeginTx(br.Ctx, &sql.TxOptions{Isolation: sql.LevelReadCommitted})
 			if err != nil {
-				br.Metrics.ReadErrors.Add(1)
+				br.Metrics.AggregateReadErrors.Add(1)
 				continue
 			}
 
@@ -163,23 +163,23 @@ func (br *QueueBenchmarkRun) Reader(id int, wg *sync.WaitGroup) {
 			// step 3a: delete
 			if _, err := tx.Stmt(delStmt).ExecContext(br.Ctx, id64); err != nil {
 				_ = tx.Rollback()
-				br.Metrics.ReadErrors.Add(1)
+				br.Metrics.AggregateReadErrors.Add(1)
 				continue
 			}
 			// step 3b: insert into archive
 			if _, err := tx.Stmt(insStmt).ExecContext(br.Ctx, id64, payload, created); err != nil {
 				_ = tx.Rollback()
-				br.Metrics.ReadErrors.Add(1)
+				br.Metrics.AggregateReadErrors.Add(1)
 				continue
 			}
 
 			if err := tx.Commit(); err != nil {
-				br.Metrics.ReadErrors.Add(1)
+				br.Metrics.AggregateReadErrors.Add(1)
 				continue
 			}
 
-			br.Metrics.ReadsCompleted.Add(1)
-			br.Metrics.UpdatesCompleted.Add(1)
+			br.Metrics.AggregateReadsCompleted.Add(1)
+			br.Metrics.AggregateUpdatesCompleted.Add(1)
 			selectLatency := time.Since(start).Nanoseconds()
 			if err := selectHist.RecordValue(selectLatency); err != nil {
 				log.Printf("[reader %d] histogram record error: %v (lat=%dns)", id, err, selectLatency)

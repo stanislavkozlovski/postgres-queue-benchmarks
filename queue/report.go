@@ -23,8 +23,8 @@ func (br *QueueBenchmarkRun) Reporter(wg *sync.WaitGroup) {
 			now := time.Now()
 			secs := now.Sub(lastTime).Seconds()
 
-			writes := br.Metrics.WritesCompleted.Load()
-			reads := br.Metrics.ReadsCompleted.Load()
+			writes := br.Metrics.AggregateWritesCompleted.Load()
+			reads := br.Metrics.AggregateReadsCompleted.Load()
 
 			writeRate := float64(writes-lastWrites) / secs
 			readRate := float64(reads-lastReads) / secs
@@ -35,8 +35,8 @@ func (br *QueueBenchmarkRun) Reporter(wg *sync.WaitGroup) {
 				writeRate,
 				readRate,
 				queueDepth,
-				br.Metrics.WriteErrors.Load(),
-				br.Metrics.ReadErrors.Load(),
+				br.Metrics.AggregateWriteErrors.Load(),
+				br.Metrics.AggregateReadErrors.Load(),
 			)
 
 			lastWrites = writes

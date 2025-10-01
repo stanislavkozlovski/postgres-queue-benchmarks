@@ -6,12 +6,12 @@ import (
 	"github.com/HdrHistogram/hdrhistogram-go"
 )
 
-type QueueMetrics struct {
-	WritesCompleted  atomic.Int64
-	ReadsCompleted   atomic.Int64
-	UpdatesCompleted atomic.Int64
-	WriteErrors      atomic.Int64
-	ReadErrors       atomic.Int64
+type BaseMetrics struct {
+	AggregateWritesCompleted  atomic.Int64
+	AggregateReadsCompleted   atomic.Int64
+	AggregateUpdatesCompleted atomic.Int64
+	AggregateWriteErrors      atomic.Int64
+	AggregateReadErrors       atomic.Int64
 
 	// Writer captures the latency to execute the INSERT write query
 	WriterHists []*hdrhistogram.Histogram
@@ -22,8 +22,8 @@ type QueueMetrics struct {
 	ReaderE2EHists []*hdrhistogram.Histogram
 }
 
-func NewMetrics(writers, readers int) *QueueMetrics {
-	m := &QueueMetrics{
+func NewMetrics(writers, readers int) *BaseMetrics {
+	m := &BaseMetrics{
 		WriterHists:     make([]*hdrhistogram.Histogram, writers),
 		ReaderReadHists: make([]*hdrhistogram.Histogram, readers),
 		ReaderE2EHists:  make([]*hdrhistogram.Histogram, readers),

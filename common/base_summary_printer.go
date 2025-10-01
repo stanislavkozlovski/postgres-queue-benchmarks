@@ -29,16 +29,16 @@ func mergeHists(hists []*hdrhistogram.Histogram) *hdrhistogram.Histogram {
 }
 func (br *BenchmarkRun) PrintSummary(dur time.Duration) {
 	fmt.Printf("\n=== Summary ===\n")
-	fmt.Printf("Total Writes: %d\n", br.Metrics.WritesCompleted.Load())
-	fmt.Printf("Total Reads: %d\n", br.Metrics.ReadsCompleted.Load())
-	fmt.Printf("Total Updates: %d\n", br.Metrics.UpdatesCompleted.Load())
-	fmt.Printf("Write Errors: %d\n", br.Metrics.WriteErrors.Load())
-	fmt.Printf("Read Errors: %d\n", br.Metrics.ReadErrors.Load())
+	fmt.Printf("Total Writes: %d\n", br.Metrics.AggregateWritesCompleted.Load())
+	fmt.Printf("Total Reads: %d\n", br.Metrics.AggregateReadsCompleted.Load())
+	fmt.Printf("Total Updates: %d\n", br.Metrics.AggregateUpdatesCompleted.Load())
+	fmt.Printf("Write Errors: %d\n", br.Metrics.AggregateWriteErrors.Load())
+	fmt.Printf("Read Errors: %d\n", br.Metrics.AggregateReadErrors.Load())
 
 	secs := dur.Seconds()
 	if secs > 0 {
-		fmt.Printf("Avg Write Throughput: %.2f rows/sec\n", float64(br.Metrics.WritesCompleted.Load())/secs)
-		fmt.Printf("Avg Read Throughput: %.2f rows/sec\n", float64(br.Metrics.ReadsCompleted.Load())/secs)
+		fmt.Printf("Avg Write Throughput: %.2f rows/sec\n", float64(br.Metrics.AggregateWritesCompleted.Load())/secs)
+		fmt.Printf("Avg Read Throughput: %.2f rows/sec\n", float64(br.Metrics.AggregateReadsCompleted.Load())/secs)
 	}
 
 	writeHist := mergeHists(br.Metrics.WriterHists)
