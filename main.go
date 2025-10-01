@@ -48,6 +48,8 @@ func main() {
 		limiter = rate.NewLimiter(rate.Limit(throttleWrs), throttleWrs)
 	}
 
+	numWriters := *writers
+	numReaders := *readers
 	baseCfg := &c.BaselineConfig{
 		Writers:        *writers,
 		Readers:        *readers,
@@ -55,6 +57,9 @@ func main() {
 		PayloadSize:    *payload,
 		ReportInterval: *reportEvery,
 	}
+	// ensure we allow enough client-side connections
+	db.SetMaxOpenConns(numReaders + numWriters)
+	db.SetMaxIdleConns(numReaders + numWriters)
 
 	ctx, _ := context.WithTimeout(context.Background(), baseCfg.Duration)
 
