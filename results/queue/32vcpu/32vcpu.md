@@ -42,13 +42,15 @@ I talked to ChatGPT a ton and it gave me the following configs:
 This got me to ~16 MB/s, but I wasn't able to push further despite server CPU being low.
 The next bottleneck was the **clients**! Postgres' average read latency was ~3ms, and I had 50 reader clients. Each client therefore can't sequentially execute more than 333 reads a second.
 Collectively they can't pass 16650 req/s - ~16 MiB/s.
-This comes from the simple fact that we're not batching. There is a lot of overhead (both in the client and server side) that each statement is only processing one message.
+This comes from the simple fact that we're not batching. There is a lot of overhead (both in the client and server side) when each statement is only processing one message. In fact, each message has 4 statements to it (INSERT, SELECT, DELETE, INSERT). This is insanely inefficient.
 In the later tests, we will attempt batching. Systems like Kafka make heavy, heavy use of it.
-At some point, the WAL fsync() calls will become the bottleneck. Per-commit durability, esp. when you have many thousands of commits a second, is expensive. I managed to get avg fsync down fron ~1.8ms to ~0.3ms by tuning the commit delay to 20 microseconds.
+At some point, the WAL fsync() calls will become the bottleneck. Per-commit durability, esp. when you have many thousands of commits a second, is expensive. In this test, I managed to get avg fsync down fron ~1.8ms to ~0.3ms by tuning the commit delay to 20 microseconds.
+I speak like I know what I'm talking about -- but I don't. This is mostly ChatGPT figuring things out for me, and I'm just applying general first-principles thinking.
 
 For now, let's just add more clients and see where this takes us.
-Increasing the number of connections to 200 total (100 readers/100 writes) led its CPU pegged. Time for a bigger machine!
-I re-deployed the client on a larger machine.
+
+Increasing the number of connections to 200 total (100 readers/100 writes) led me to get CPU pegged on the client. Time for a bigger machine!
+I re-deployed the client on a larger machine:
 
 # Larger Client & Modified Settings
 
