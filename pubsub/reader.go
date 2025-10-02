@@ -2,6 +2,7 @@ package pubsub
 
 import (
 	"database/sql"
+	"fmt"
 	"log"
 	"sync"
 	"time"
@@ -54,6 +55,10 @@ func (br *PubSubBenchmarkRun) GroupMember(groupID int, gm *GroupMetrics, consume
 	conn, _ := br.Db.Conn(br.Ctx)
 	defer conn.Close()
 
+	err := br.ensureConsumerGroupRow(conn, groupID)
+	if err != nil {
+		panic("ensure group row failed: " + err.Error())
+	}
 	claimStmt, err := conn.PrepareContext(br.Ctx, claimSQL)
 	if err != nil {
 		panic("prepare claimStmt failed: " + err.Error())
@@ -170,7 +175,7 @@ func (br *PubSubBenchmarkRun) kafkaSemanticRead(conn *sql.Conn, gm *GroupMetrics
 		groupID, br.config.ReadBatchSize).Scan(&startOff, &endOff); err != nil {
 		_ = tx.Rollback()
 		log.Printf("[consumer g%d r%d] Claim err: %v", groupID, consumerID, err)
-		
+
 		gm.ClaimErrors.Add(1)
 		time.Sleep(jitter(100*time.Microsecond, 800*time.Microsecond))
 		return
@@ -239,4 +244,32 @@ func jitter(min, max time.Duration) time.Duration {
 		return min
 	}
 	return min + time.Duration(r%span)
+}
+
+// EnsureConsumerGroupRow makes sure a row exists in consumer_offsets for this group.
+// It creates one with next_offset = 1 if it doesn't already exist.
+// Safe to call multiple times; concurrent calls will not conflict.
+func (br *PubSubBenchmarkRun) ensureConsumerGroupRow(conn *sql.Conn, groupID int) error {
+	tx, err := conn.BeginTx(br.Ctx, &sql.TxOptions{Isolation: sql.LevelReadCommitted})
+	if err != nil {
+		return fmt.Errorf("begin tx: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }() // rollback is no-op if committed
+
+	// use a stable group_id string key (you can change format if you want int only)
+	groupKey := fmt.Sprintf("g%d", groupID)
+
+	_, err = tx.ExecContext(br.Ctx, `
+		INSERT INTO consumer_offsets (group_id, next_offset)
+		VALUES ($1::text, 1)
+		ON CONFLICT (group_id) DO NOTHING;
+	`, groupKey)
+	if err != nil {
+		return fmt.Errorf("insert consumer_offsets: %w", err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit: %w", err)
+	}
+	return nil
 }
