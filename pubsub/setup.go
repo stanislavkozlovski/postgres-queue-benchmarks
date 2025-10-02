@@ -23,8 +23,11 @@ CREATE TABLE topicpartition (
 		`,
 
 		// fast range scans on the log via offset
-		"CREATE UNIQUE INDEX idx_topicpartition_offset ON topicpartition(c_offset);",
-
+		//"CREATE UNIQUE INDEX idx_topicpartition_offset ON topicpartition(c_offset);",
+		
+		`
+CREATE INDEX idx_topicpartition_offset_brin
+ON topicpartition USING brin(c_offset) WITH (pages_per_range = 128);`,
 		// a single table acting as a global counter for writers. there's only one row they increase
 		// (ofc this can be extended for more tables)
 		`
@@ -41,6 +44,12 @@ CREATE TABLE log_counter (
 CREATE TABLE consumer_offsets (
   group_id     TEXT PRIMARY KEY,
   next_offset  BIGINT NOT NULL DEFAULT 1 -- next offset to claim/read
+);`,
+
+		// frequently analyze the table
+		`
+ALTER TABLE public.topicpartition SET (
+  autovacuum_analyze_scale_factor = 0.05
 );`,
 	}
 
