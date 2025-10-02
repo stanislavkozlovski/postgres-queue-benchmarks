@@ -243,6 +243,7 @@ func (br *PubSubBenchmarkRun) kafkaSemanticRead(conn *sql.Conn, gm *GroupMetrics
 	gm.UpdatesCompleted.Add(count)
 	gm.PolledRecords.Add(count)
 	gm.Polls.Add(1)
+	br.Metrics.AggregateReadsCompleted.Add(count)
 	lat := time.Since(start).Nanoseconds()
 	_ = gm.ReaderReadHists[consumerID].RecordValue(lat)
 }

@@ -2,11 +2,10 @@ package pubsub
 
 import (
 	"fmt"
+	"github.com/HdrHistogram/hdrhistogram-go"
 	"time"
 )
 
-// PrintSummary prints a per-group summary of pubsub metrics.
-// dur = benchmark duration; kafkaSemantics controls how we label delivery semantics.
 func (pm *PubSubMetrics) PrintSummary(dur time.Duration, kafkaSemantics bool) {
 	fmt.Printf("\n=== PubSub Summary ===\n")
 	secs := dur.Seconds()
@@ -19,6 +18,13 @@ func (pm *PubSubMetrics) PrintSummary(dur time.Duration, kafkaSemantics bool) {
 	fmt.Printf("Duration: %s (%.1fs)\n", dur, secs)
 
 	snapshots := pm.Snapshot()
+
+	// accumulators
+	var totalReads, totalReadErr, totalUpdates, totalClaimErr, totalEmpty int64
+	var totalPolls, totalRecs int64
+	allReadHists := []*hdrhistogram.Histogram{}
+	allE2EHists := []*hdrhistogram.Histogram{}
+
 	for _, gs := range snapshots {
 		fmt.Printf("\n-- Consumer Group %d --\n", gs.GroupID)
 		fmt.Printf("  Reads Completed:   %d\n", gs.ReadsCompleted)
@@ -41,6 +47,52 @@ func (pm *PubSubMetrics) PrintSummary(dur time.Duration, kafkaSemantics bool) {
 		fmt.Printf("    P50: %v\n", time.Duration(gs.E2EP50))
 		fmt.Printf("    P95: %v\n", time.Duration(gs.E2EP95))
 		fmt.Printf("    P99: %v\n", time.Duration(gs.E2EP99))
+
+		// accumulate totals
+		totalReads += gs.ReadsCompleted
+		totalReadErr += gs.ReadErrors
+		totalUpdates += gs.UpdatesCompleted
+		totalClaimErr += gs.ClaimErrors
+		totalEmpty += gs.EmptyClaims
+
+		// grab the original hist slices for merging
+		gm := pm.mustGroup(gs.GroupID)
+		allReadHists = append(allReadHists, gm.ReaderReadHists...)
+		allE2EHists = append(allE2EHists, gm.ReaderE2EHists...)
+
+		totalPolls += gm.Polls.Load()
+		totalRecs += gm.PolledRecords.Load()
 	}
+
+	// final merge
+	readAgg := mergeHists(allReadHists)
+	e2eAgg := mergeHists(allE2EHists)
+
+	avgPollSize := 0.0
+	if totalPolls > 0 {
+		avgPollSize = float64(totalRecs) / float64(totalPolls)
+	}
+
+	fmt.Printf("\n=== Aggregate Across All Groups ===\n")
+	fmt.Printf("  Total Reads Completed: %d\n", totalReads)
+	fmt.Printf("  Total Read Errors:     %d\n", totalReadErr)
+	fmt.Printf("  Total Updates:         %d\n", totalUpdates)
+	fmt.Printf("  Total Claim Errors:    %d\n", totalClaimErr)
+	fmt.Printf("  Total Empty Claims:    %d\n", totalEmpty)
+	fmt.Printf("  Avg Poll Size:         %.2f\n", avgPollSize)
+
+	if secs > 0 {
+		fmt.Printf("  Avg Throughput:        %.2f reads/sec\n", float64(totalReads)/secs)
+	}
+
+	fmt.Printf("\n  Read Latency (claim txn):\n")
+	fmt.Printf("    P50: %v\n", time.Duration(readAgg.ValueAtQuantile(50)))
+	fmt.Printf("    P95: %v\n", time.Duration(readAgg.ValueAtQuantile(95)))
+	fmt.Printf("    P99: %v\n", time.Duration(readAgg.ValueAtQuantile(99)))
+
+	fmt.Printf("\n  End-to-End Latency (created_at → consumed):\n")
+	fmt.Printf("    P50: %v\n", time.Duration(e2eAgg.ValueAtQuantile(50)))
+	fmt.Printf("    P95: %v\n", time.Duration(e2eAgg.ValueAtQuantile(95)))
+	fmt.Printf("    P99: %v\n", time.Duration(e2eAgg.ValueAtQuantile(99)))
 	fmt.Println()
 }

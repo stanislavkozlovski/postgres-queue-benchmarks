@@ -52,7 +52,7 @@ func (br *BenchmarkRun) PrintSummary(dur time.Duration) {
 		fmt.Printf("  P99: %v\n", time.Duration(writeHist.ValueAtQuantile(99)))
 	}
 	if readHist != nil {
-		fmt.Printf("\nRead Latencies (txn: SELECT+DELETE+INSERT):\n")
+		fmt.Printf("\nRead Latencies (txn: SELECT+DELETE+INSERT in queue; txn: UPDATE+SELECT range in pub-sub kafka semantics):\n")
 		fmt.Printf("  P50: %v\n", time.Duration(readHist.ValueAtQuantile(50)))
 		fmt.Printf("  P95: %v\n", time.Duration(readHist.ValueAtQuantile(95)))
 		fmt.Printf("  P99: %v\n", time.Duration(readHist.ValueAtQuantile(99)))

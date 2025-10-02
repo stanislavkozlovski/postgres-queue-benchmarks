@@ -11,7 +11,7 @@ export HOST="172.31.83.119"  # adjust to your server's private IP
   --payload=1024 \
   --report=5s \
   --write-batch 100 \
-  --read-batch 200 \
+  --read-batch 100 \
   --kafka-pub-sub-semantics \
   --writers=50 \
   --readers=2 \
