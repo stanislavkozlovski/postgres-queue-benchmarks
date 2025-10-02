@@ -112,6 +112,9 @@ func (br *PubSubBenchmarkRun) atMostOnceRead(conn *sql.Conn, gm *GroupMetrics, g
 	}
 
 	if err := claimOffsetTx.Commit(); err != nil {
+		log.Printf("[consumer g%d r%d] Claim err: %v", groupID, consumerID, err)
+		time.Sleep(jitter(100*time.Microsecond, 800000*time.Microsecond))
+
 		gm.ClaimErrors.Add(1)
 		return
 	}
