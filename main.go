@@ -65,13 +65,14 @@ func main() {
 		PayloadSize:    *payload,
 		ReportInterval: *reportEvery,
 	}
-	// ensure we allow enough client-side connections
-	db.SetMaxOpenConns(numReaders + numWriters)
-	db.SetMaxIdleConns(numReaders + numWriters)
 
 	ctx, _ := context.WithTimeout(context.Background(), baseCfg.Duration)
 
 	if *mode == "queue" {
+		// ensure we allow enough client-side connections
+		db.SetMaxOpenConns(numReaders + numWriters + 2)
+		db.SetMaxIdleConns(numReaders + numWriters + 2)
+
 		queueCfg := &queue.QueueConfig{
 			BaselineConfig:  *baseCfg,
 			TuneTableVacuum: *tuneTableVac,
@@ -89,6 +90,11 @@ func main() {
 		_ = br.Db.Close()
 		log.Println("queue benchmark complete")
 	} else if *mode == "pubsub" {
+		numCGroups := *numGroups
+		// ensure we allow enough client-side connections
+		db.SetMaxOpenConns((numReaders * numCGroups) + numWriters + 2)
+		db.SetMaxIdleConns((numReaders * numCGroups) + numWriters + 2)
+
 		pubsubCfg := &pubsub.PubSubConfig{
 			BaselineConfig:    *baseCfg,
 			NumConsumerGroups: *numGroups,
