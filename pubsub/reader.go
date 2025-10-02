@@ -36,6 +36,7 @@ to_claim AS (
     ) AS delta
   FROM consumer_offsets c
   WHERE c.group_id = $1::text
+  FOR UPDATE
 ),
 
 upd AS (
