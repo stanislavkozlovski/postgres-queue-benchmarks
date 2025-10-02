@@ -18,7 +18,7 @@ WITH reserve AS (
   WHERE id = 1
   RETURNING (next_offset - $1) AS first_off
 )
-INSERT INTO topicpartition(offset, payload)
+INSERT INTO topicpartition(c_offset, payload)
 SELECT r.first_off + p.ord - 1, p.payload
 FROM reserve r,
      unnest($2::bytea[]) WITH ORDINALITY AS p(payload, ord);
