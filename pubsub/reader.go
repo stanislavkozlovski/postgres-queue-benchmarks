@@ -169,6 +169,8 @@ func (br *PubSubBenchmarkRun) kafkaSemanticRead(conn *sql.Conn, gm *GroupMetrics
 	if err := tx.StmtContext(br.Ctx, claimOffsetsStmt).QueryRowContext(br.Ctx,
 		groupID, br.config.ReadBatchSize).Scan(&startOff, &endOff); err != nil {
 		_ = tx.Rollback()
+		log.Printf("[consumer g%d r%d] Claim err: %v", groupID, consumerID, err)
+		
 		gm.ClaimErrors.Add(1)
 		time.Sleep(jitter(100*time.Microsecond, 800*time.Microsecond))
 		return
