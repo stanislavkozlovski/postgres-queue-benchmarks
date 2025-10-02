@@ -55,7 +55,9 @@ func (br *PubSubBenchmarkRun) GroupMember(groupID int, gm *GroupMetrics, consume
 	conn, _ := br.Db.Conn(br.Ctx)
 	defer conn.Close()
 
-	err := br.ensureConsumerGroupRow(conn, groupID)
+	groupKey := fmt.Sprintf("g%d", groupID)
+
+	err := br.ensureConsumerGroupRow(conn, groupKey)
 	if err != nil {
 		panic("ensure group row failed: " + err.Error())
 	}
@@ -77,9 +79,9 @@ func (br *PubSubBenchmarkRun) GroupMember(groupID int, gm *GroupMetrics, consume
 			return
 		default:
 			if kafkaSemantics {
-				br.kafkaSemanticRead(conn, gm, groupID, consumerID, claimStmt, readStmt)
+				br.kafkaSemanticRead(conn, gm, groupKey, consumerID, claimStmt, readStmt)
 			} else {
-				br.atMostOnceRead(conn, gm, groupID, consumerID, claimStmt, readStmt)
+				br.atMostOnceRead(conn, gm, groupKey, consumerID, claimStmt, readStmt)
 			}
 		}
 	}
@@ -89,7 +91,7 @@ func (br *PubSubBenchmarkRun) GroupMember(groupID int, gm *GroupMetrics, consume
 // This leads to at most once semantics, as claims can be lost if the reader crashes after claiming and doesn't process.
 // Retries could be added to ensure at-least-once, but that's extra work.
 // This also breaks ordering guarantees, because during errors/retries/timeouts other consumers can claim and process future messages before this one.
-func (br *PubSubBenchmarkRun) atMostOnceRead(conn *sql.Conn, gm *GroupMetrics, groupID int, consumerID int, claimOffsetsStmt *sql.Stmt, readDataStmt *sql.Stmt) {
+func (br *PubSubBenchmarkRun) atMostOnceRead(conn *sql.Conn, gm *GroupMetrics, groupKey string, consumerID int, claimOffsetsStmt *sql.Stmt, readDataStmt *sql.Stmt) {
 	// -- Claim TX Start
 	claimOffsetTx, err := conn.BeginTx(br.Ctx, &sql.TxOptions{Isolation: sql.LevelReadCommitted})
 	if err != nil {
@@ -99,9 +101,9 @@ func (br *PubSubBenchmarkRun) atMostOnceRead(conn *sql.Conn, gm *GroupMetrics, g
 
 	var startOff, endOff sql.NullInt64
 	if err := claimOffsetTx.StmtContext(br.Ctx, claimOffsetsStmt).QueryRowContext(br.Ctx,
-		groupID, br.config.ReadBatchSize).Scan(&startOff, &endOff); err != nil {
+		groupKey, br.config.ReadBatchSize).Scan(&startOff, &endOff); err != nil {
 		_ = claimOffsetTx.Rollback()
-		log.Printf("[consumer g%d r%d] Claim err: %v", groupID, consumerID, err)
+		log.Printf("[consumer %s r%d] Claim err: %v", groupKey, consumerID, err)
 
 		gm.ClaimErrors.Add(1)
 		time.Sleep(jitter(100*time.Microsecond, 800000*time.Microsecond))
@@ -117,7 +119,7 @@ func (br *PubSubBenchmarkRun) atMostOnceRead(conn *sql.Conn, gm *GroupMetrics, g
 	}
 
 	if err := claimOffsetTx.Commit(); err != nil {
-		log.Printf("[consumer g%d r%d] Claim err: %v", groupID, consumerID, err)
+		log.Printf("[consumer %s r%d] Claim err: %v", groupKey, consumerID, err)
 		time.Sleep(jitter(100*time.Microsecond, 800000*time.Microsecond))
 
 		gm.ClaimErrors.Add(1)
@@ -163,7 +165,7 @@ func (br *PubSubBenchmarkRun) atMostOnceRead(conn *sql.Conn, gm *GroupMetrics, g
 // kafkaSemanticRead does the Offset Claim + Select in one transaction.
 // This gives you at-least-once semantics and strict ordering.
 // It doesn't make much sense to run a lot of consumers in a group with this mode.
-func (br *PubSubBenchmarkRun) kafkaSemanticRead(conn *sql.Conn, gm *GroupMetrics, groupID int, consumerID int, claimOffsetsStmt *sql.Stmt, readDataStmt *sql.Stmt) {
+func (br *PubSubBenchmarkRun) kafkaSemanticRead(conn *sql.Conn, gm *GroupMetrics, groupID string, consumerID int, claimOffsetsStmt *sql.Stmt, readDataStmt *sql.Stmt) {
 	tx, err := conn.BeginTx(br.Ctx, &sql.TxOptions{Isolation: sql.LevelReadCommitted})
 	if err != nil {
 		gm.ReadErrors.Add(1)
@@ -174,7 +176,7 @@ func (br *PubSubBenchmarkRun) kafkaSemanticRead(conn *sql.Conn, gm *GroupMetrics
 	if err := tx.StmtContext(br.Ctx, claimOffsetsStmt).QueryRowContext(br.Ctx,
 		groupID, br.config.ReadBatchSize).Scan(&startOff, &endOff); err != nil {
 		_ = tx.Rollback()
-		log.Printf("[consumer g%d r%d] Claim err: %v", groupID, consumerID, err)
+		log.Printf("[consumer %s r%d] Claim err: %v", groupID, consumerID, err)
 
 		gm.ClaimErrors.Add(1)
 		time.Sleep(jitter(100*time.Microsecond, 800*time.Microsecond))
@@ -205,7 +207,7 @@ func (br *PubSubBenchmarkRun) kafkaSemanticRead(conn *sql.Conn, gm *GroupMetrics
 		var payload []byte
 		var created time.Time
 		if err := rows.Scan(&off, &payload, &created); err != nil {
-			log.Printf("[consumer g%d r%d] scan err: %v", groupID, consumerID, err)
+			log.Printf("[consumer %s r%d] scan err: %v", groupID, consumerID, err)
 			continue
 		}
 		count++
@@ -249,15 +251,12 @@ func jitter(min, max time.Duration) time.Duration {
 // EnsureConsumerGroupRow makes sure a row exists in consumer_offsets for this group.
 // It creates one with next_offset = 1 if it doesn't already exist.
 // Safe to call multiple times; concurrent calls will not conflict.
-func (br *PubSubBenchmarkRun) ensureConsumerGroupRow(conn *sql.Conn, groupID int) error {
+func (br *PubSubBenchmarkRun) ensureConsumerGroupRow(conn *sql.Conn, groupKey string) error {
 	tx, err := conn.BeginTx(br.Ctx, &sql.TxOptions{Isolation: sql.LevelReadCommitted})
 	if err != nil {
 		return fmt.Errorf("begin tx: %w", err)
 	}
 	defer func() { _ = tx.Rollback() }() // rollback is no-op if committed
-
-	// use a stable group_id string key (you can change format if you want int only)
-	groupKey := fmt.Sprintf("g%d", groupID)
 
 	_, err = tx.ExecContext(br.Ctx, `
 		INSERT INTO consumer_offsets (group_id, next_offset)
