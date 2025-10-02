@@ -158,7 +158,7 @@ func (br *PubSubBenchmarkRun) atMostOnceRead(conn *sql.Conn, gm *GroupMetrics, g
 		var payload []byte
 		var created time.Time
 		if err := rows.Scan(&off, &payload, &created); err != nil {
-			log.Printf("[consumer g%d r%d] scan err: %v", groupID, consumerID, err)
+			log.Printf("[consumer %s r%d] scan err: %v", groupKey, consumerID, err)
 			continue
 		}
 		count++
