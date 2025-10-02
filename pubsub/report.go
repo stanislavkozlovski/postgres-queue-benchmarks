@@ -32,31 +32,44 @@ func (br *PubSubBenchmarkRun) Reporter(wg *sync.WaitGroup) {
 			snaps := br.PubSubMetrics.ShortSnapshot()
 			totalReads := int64(0)
 			fmt.Printf("[%s] W: %.0f/s TotalW:%d\n", now.Format("15:04:05"), writeRate, writes)
-			fmt.Printf("  %-6s %-8s %-10s %-8s %-8s %-8s\n",
-				"Group", "R/s", "TotR", "Err", "Empty", "AvgPoll")
-
+			fmt.Printf("  %-6s %-8s %-10s %-8s %-8s %-8s %-8s\n",
+				"Group", "R/s", "TotR", "Err", "Empty", "AvgPoll", "QueueDepth")
+			queueDepths := make([]int64, 0, len(snaps))
 			for _, gs := range snaps {
 				deltaR := gs.ReadsCompleted - lastReads[gs.GroupID]
 				readRate := float64(deltaR) / secs
 				lastReads[gs.GroupID] = gs.ReadsCompleted
 				totalReads += deltaR
+				groupDepth := writes - gs.ReadsCompleted
+				queueDepths = append(queueDepths, groupDepth)
 
-				fmt.Printf("  %-6d %-8.0f %-10d %-8d %-8d %-8.1f\n",
+				fmt.Printf("  %-6d %-8.0f %-10d %-8d %-8d %-8.1f %-8d\n",
 					gs.GroupID,
 					readRate,
 					gs.ReadsCompleted,
 					gs.ReadErrors,
 					gs.EmptyClaims,
 					gs.AvgPollSize,
+					groupDepth,
 				)
 			}
 
-			queueDepth := writes - 0
-			for _, gs := range snaps {
-				queueDepth -= gs.ReadsCompleted
+			// compute min/max depth across groups
+			minDepth, maxDepth := int64(1<<62), int64(-1<<62)
+			for _, d := range queueDepths {
+				if d < minDepth {
+					minDepth = d
+				}
+				if d > maxDepth {
+					maxDepth = d
+				}
 			}
-			fmt.Printf("  TotalR: %.0f/s QueueDepth:%d\n\n", float64(totalReads)/secs, queueDepth)
 
+			fmt.Printf("  TotalR: %.0f/s QueueDepth(min=%d, max=%d)\n\n",
+				float64(totalReads)/secs,
+				minDepth,
+				maxDepth,
+			)
 			lastTime = now
 		}
 	}
