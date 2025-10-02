@@ -16,7 +16,7 @@ func (br *PubSubBenchmarkRun) Setup() error {
 		`
 CREATE TABLE topicpartition (
   id          BIGSERIAL PRIMARY KEY,  -- physical row id (not used for reads)
-  offset      BIGINT UNIQUE NOT NULL, -- gapless, strictly increasing, read-key
+  c_offset      BIGINT UNIQUE NOT NULL, -- gapless, strictly increasing, read-key
   payload     BYTEA NOT NULL,
   created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );

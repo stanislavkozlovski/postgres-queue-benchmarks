@@ -39,10 +39,10 @@ SELECT claimed_start_offset, claimed_end_offset
 FROM claimed_range;
 `
 
-const readSQL = `SELECT offset, payload, created_at
+const readSQL = `SELECT c_offset, payload, created_at
 		   	FROM topicpartition
-		  	WHERE offset BETWEEN $1 AND $2
-		  	ORDER BY offset`
+		  	WHERE c_offset BETWEEN $1 AND $2
+		  	ORDER BY c_offset`
 
 // GroupMember runs the read loop for a single subscriber in a consumer group.
 // groupID is the unique group identifier.
@@ -60,11 +60,7 @@ func (br *PubSubBenchmarkRun) GroupMember(groupID int, gm *GroupMetrics, consume
 	}
 	defer claimStmt.Close()
 
-	readStmt, err := conn.PrepareContext(br.Ctx,
-		`SELECT offset, payload, created_at
-		   FROM topicpartition
-		  WHERE offset BETWEEN $1 AND $2
-		  ORDER BY offset`)
+	readStmt, err := conn.PrepareContext(br.Ctx, readSQL)
 	if err != nil {
 		panic("prepare readStmt failed: " + err.Error())
 	}
