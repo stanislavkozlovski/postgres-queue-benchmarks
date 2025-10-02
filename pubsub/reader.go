@@ -32,7 +32,7 @@ to_claim AS (
       -- how many are available to claim?
       -- on first read: 1-1+1 = 1
       -- on second reads (imagine 100 new records are in): 101 - 2 + 1 = 100 delta
-      GREATEST(0, (SELECT h FROM counter_tip) - c.next_offset + 1)
+      GREATEST(0, (SELECT highest_committed_offset FROM counter_tip) - c.next_offset + 1)
     ) AS delta
   FROM consumer_offsets c
   WHERE c.group_id = $1::text
