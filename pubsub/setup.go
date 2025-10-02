@@ -23,7 +23,7 @@ CREATE TABLE topicpartition (
 		`,
 
 		// fast range scans on the log via offset
-		"CREATE UNIQUE INDEX idx_topicpartition_offset ON topicpartition(offset);",
+		"CREATE UNIQUE INDEX idx_topicpartition_offset ON topicpartition(c_offset);",
 
 		// a single table acting as a global counter for writers. there's only one row they increase
 		// (ofc this can be extended for more tables)
