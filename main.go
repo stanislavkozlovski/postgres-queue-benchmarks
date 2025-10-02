@@ -8,6 +8,7 @@ import (
 	_ "github.com/lib/pq" // needed for the postgres driver. imported for side effects
 	"golang.org/x/time/rate"
 	"log"
+	"main/pubsub"
 	"time"
 
 	c "main/common"
@@ -29,7 +30,13 @@ func main() {
 		reportEvery    = flag.Duration("report", 5*time.Second, "Report interval")
 		throttleWrites = flag.Int("throttle_writes", 0, "Throttle writer rows/sec (0=unlimited)")
 		tuneTableVac   = flag.Bool("tune-table-vacuum", false, "Apply aggressive autovacuum/fillfactor to queue table")
+		kafkaPubSub    = flag.Bool("kafka-pub-sub-semantics", false, "Whether to use at-least-once & strict ordering semantics via pubsub")
 		mode           = flag.String("mode", "queue", "mode: queue|pubsub - which benchmark to run")
+
+		// pubsub-specific
+		numGroups      = flag.Int("consumer-groups", 1, "Number of consumer groups (subscribers) (for pub-sub)")
+		readBatchSize  = flag.Int("read-batch", 100, "Max number of messages to read per request (for pub-sub)")
+		writeBatchSize = flag.Int("write-batch", 100, "Number of messages per write request (for pub-sub)")
 	)
 	flag.Parse()
 
@@ -81,5 +88,29 @@ func main() {
 		br.PrintSummary(queueCfg.Duration)
 		_ = br.Db.Close()
 		log.Println("queue benchmark complete")
+	} else if *mode == "pubsub" {
+		pubsubCfg := &pubsub.PubSubConfig{
+			BaselineConfig:    *baseCfg,
+			NumConsumerGroups: *numGroups,
+			ReadBatchSize:     *readBatchSize,
+			WriteBatchSize:    *writeBatchSize,
+			KafkaSemantics:    *kafkaPubSub,
+		}
+
+		br, err := pubsub.NewPubSubBenchmarkRun(pubsubCfg, db, ctx, limiter)
+		if err != nil {
+			log.Fatalf("connect: %v", err)
+		}
+		if err := br.Setup(); err != nil {
+			log.Fatalf("setup: %v", err)
+		}
+		br.Run()
+		br.PrintSummary(pubsubCfg.Duration)
+		br.PubSubMetrics.PrintSummary(pubsubCfg.Duration, pubsubCfg.KafkaSemantics)
+		_ = br.Db.Close()
+		log.Println("pubsub benchmark complete")
+
+	} else {
+		log.Fatalf("unknown mode %q", *mode)
 	}
 }

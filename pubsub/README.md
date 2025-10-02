@@ -17,7 +17,7 @@ The pseudocode is the following:
 #### The Tables
 ```SQL
 -- === core log ===
-CREATE TABLE data (
+CREATE TABLE topicpartition (
   id          BIGSERIAL PRIMARY KEY,                  -- physical row id (not used for reads)
   offset      BIGINT UNIQUE NOT NULL,                 -- gapless, strictly increasing, read-key
   payload     BYTEA NOT NULL,
@@ -25,7 +25,7 @@ CREATE TABLE data (
 );
 
 -- fast range scans on the logical log
-CREATE UNIQUE INDEX idx_data_offset ON data(offset);
+CREATE UNIQUE INDEX idx_topicpartition_offset ON topicpartition(offset);
 
 
 -- === txn-safe global counter for writers ===
@@ -53,7 +53,7 @@ SET next_offset = next_offset + :batch_size
 WHERE id = 1
     RETURNING (next_offset - :batch_size) AS first_off
 )
-INSERT INTO data(offset, payload)
+INSERT INTO topicpartition(offset, payload)
 SELECT r.first_off + p.ord - 1, p.payload
 FROM reserve r,
      unnest(:payloads) WITH ORDINALITY AS p(payload, ord);  -- ord = 1..batch_size

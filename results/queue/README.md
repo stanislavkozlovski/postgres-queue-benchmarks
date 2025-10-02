@@ -103,7 +103,8 @@ export HOST="172.31.18.113"  # adjust to your server's private IP
   --readers=50 \
   --duration=120s \
   --payload=1024 \
-  --report=5s
+  --report=5s \
+  --mode=queue
 ```
 
 **Flags**
