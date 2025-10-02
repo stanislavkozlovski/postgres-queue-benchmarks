@@ -96,8 +96,10 @@ func (br *PubSubBenchmarkRun) atMostOnceRead(conn *sql.Conn, gm *GroupMetrics, g
 	if err := claimOffsetTx.StmtContext(br.Ctx, claimOffsetsStmt).QueryRowContext(br.Ctx,
 		groupID, br.config.ReadBatchSize).Scan(&startOff, &endOff); err != nil {
 		_ = claimOffsetTx.Rollback()
+		log.Printf("[consumer g%d r%d] Claim err: %v", groupID, consumerID, err)
+
 		gm.ClaimErrors.Add(1)
-		time.Sleep(jitter(100*time.Microsecond, 800*time.Microsecond))
+		time.Sleep(jitter(100*time.Microsecond, 800000*time.Microsecond))
 		return
 	}
 
