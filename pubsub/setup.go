@@ -40,7 +40,7 @@ CREATE TABLE log_counter (
 		`
 CREATE TABLE consumer_offsets (
   group_id     TEXT PRIMARY KEY,
-  next_offset  BIGINT NOT NULL DEFAULT 1, -- next offset to claim/read
+  next_offset  BIGINT NOT NULL DEFAULT 1 -- next offset to claim/read
 );`,
 	}
 
