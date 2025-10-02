@@ -7,6 +7,11 @@ import (
 
 func (br *PubSubBenchmarkRun) Setup() error {
 	queries := []string{
+
+		"DROP TABLE IF EXISTS consumer_offsets CASCADE;",
+		"DROP TABLE IF EXISTS log_counter CASCADE;",
+		"DROP TABLE IF EXISTS topicpartition CASCADE;",
+
 		// the core log. it's as if it's one partition
 		`
 CREATE TABLE topicpartition (
@@ -45,6 +50,6 @@ CREATE TABLE consumer_offsets (
 		}
 	}
 
-	log.Println("[pub info] successfully applied pub-sub tables")
+	log.Println("[pub info] successfully dropped + applied pub-sub tables")
 	return nil
 }
