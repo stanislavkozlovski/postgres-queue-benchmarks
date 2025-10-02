@@ -12,32 +12,48 @@ import (
 // then atomically claim a range of messages via consumer_offsets
 // This has at least once semantics
 // It returns the start/end offset that the consumer just claimed.
+// The set start_offset
 const claimSQL = `
+-- on first read, 0 is the highest committed offset (1(next_offset)-1)
 WITH counter_tip AS (
   SELECT (next_offset - 1) AS highest_committed_offset
   FROM log_counter
   WHERE id = 1
 ),
 
-claimed_range AS (
+    
+to_claim AS (
+  SELECT
+    c.group_id,
+    c.next_offset      AS n0,   -- old start offset pointer before update
+    -- take the min of the batch size or the current offset delta
+    LEAST(
+      $2::bigint,
+      -- how many are available to claim?
+      -- on first read: 1-1+1 = 1
+      -- on second reads (imagine 100 new records are in): 101 - 2 + 1 = 100 delta
+      GREATEST(0, (SELECT h FROM counter_tip) - c.next_offset + 1)
+    ) AS delta
+  FROM consumer_offsets c
+  WHERE c.group_id = $1::text
+),
+
+upd AS (
   UPDATE consumer_offsets c
-  SET next_offset = c.next_offset
-                  + LEAST(
-                      $2,
-                      GREATEST(0,
-                        (SELECT highest_committed_offset FROM counter_tip) - c.next_offset + 1
-                      )
-                    )
-  WHERE c.group_id = $1
+  -- on first read: 1 + 1 = 2
+  -- on second read: 2 + 100 = 102
+  SET next_offset = c.next_offset + t.delta
+  FROM to_claim t
+  WHERE c.group_id = t.group_id
+  -- on first read, this will be 1,0; 1 > 0, so it's an empty claim and there's nothing to read.
+  -- if there was one record, it'd be 1,1, which would then have us fetch with ID between 1 and 1 -- i.e we'd get that record
   RETURNING
-    (next_offset - LEAST(
-       $2,
-       GREATEST(0, (SELECT highest_committed_offset FROM counter_tip) - next_offset + $2)
-     )) AS claimed_start_offset,
-    (next_offset - 1) AS claimed_end_offset
+    t.n0                        AS claimed_start_offset,  -- start = the old next_offset
+    (c.next_offset - 1)          AS claimed_end_offset    -- end   = new pointer - 1
 )
+
 SELECT claimed_start_offset, claimed_end_offset
-FROM claimed_range;
+FROM upd;
 `
 
 const readSQL = `SELECT c_offset, payload, created_at
@@ -165,7 +181,7 @@ func (br *PubSubBenchmarkRun) atMostOnceRead(conn *sql.Conn, gm *GroupMetrics, g
 // kafkaSemanticRead does the Offset Claim + Select in one transaction.
 // This gives you at-least-once semantics and strict ordering.
 // It doesn't make much sense to run a lot of consumers in a group with this mode.
-func (br *PubSubBenchmarkRun) kafkaSemanticRead(conn *sql.Conn, gm *GroupMetrics, groupID string, consumerID int, claimOffsetsStmt *sql.Stmt, readDataStmt *sql.Stmt) {
+func (br *PubSubBenchmarkRun) kafkaSemanticRead(conn *sql.Conn, gm *GroupMetrics, groupKey string, consumerID int, claimOffsetsStmt *sql.Stmt, readDataStmt *sql.Stmt) {
 	tx, err := conn.BeginTx(br.Ctx, &sql.TxOptions{Isolation: sql.LevelReadCommitted})
 	if err != nil {
 		gm.ReadErrors.Add(1)
@@ -174,12 +190,14 @@ func (br *PubSubBenchmarkRun) kafkaSemanticRead(conn *sql.Conn, gm *GroupMetrics
 
 	var startOff, endOff sql.NullInt64
 	if err := tx.StmtContext(br.Ctx, claimOffsetsStmt).QueryRowContext(br.Ctx,
-		groupID, br.config.ReadBatchSize).Scan(&startOff, &endOff); err != nil {
+		groupKey, br.config.ReadBatchSize).Scan(&startOff, &endOff); err != nil {
 		_ = tx.Rollback()
-		log.Printf("[consumer %s r%d] Claim err: %v", groupID, consumerID, err)
-
+		log.Printf("[consumer %s r%d] Claim err: %v", groupKey, consumerID, err)
+		log.Printf("[consumer %s r%d] Claim err: %v (params: groupID=%v, batchSize=%d)",
+			groupKey, consumerID, err, groupKey, br.config.ReadBatchSize)
 		gm.ClaimErrors.Add(1)
 		time.Sleep(jitter(100*time.Microsecond, 800*time.Microsecond))
+		panic("aa")
 		return
 	}
 
@@ -191,6 +209,7 @@ func (br *PubSubBenchmarkRun) kafkaSemanticRead(conn *sql.Conn, gm *GroupMetrics
 		return
 	}
 
+	log.Printf("reading range %d to %d", startOff.Int64, endOff.Int64)
 	// read the claimed range
 	start := time.Now()
 	rows, err := tx.StmtContext(br.Ctx, readDataStmt).QueryContext(br.Ctx, startOff.Int64, endOff.Int64)
@@ -207,7 +226,7 @@ func (br *PubSubBenchmarkRun) kafkaSemanticRead(conn *sql.Conn, gm *GroupMetrics
 		var payload []byte
 		var created time.Time
 		if err := rows.Scan(&off, &payload, &created); err != nil {
-			log.Printf("[consumer %s r%d] scan err: %v", groupID, consumerID, err)
+			log.Printf("[consumer %s r%d] scan err: %v", groupKey, consumerID, err)
 			continue
 		}
 		count++
