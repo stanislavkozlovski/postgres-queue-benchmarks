@@ -1,0 +1,18 @@
+
+- server: c7i.xlarge (**the cheap version**)
+    - gp3 25GB 8000 IOPS
+    - Ubuntu 24.04
+    - mostly default postgres settings
+      - log tables are configured to vacuum analyze aggressively
+    - goal: ~60% CPU
+    - $0.118/h (1yr reserved) - $1033.68 a year
+    - assume ~12h message retention (then to s3 or whatever); - deploy a 242GB disk (19.36/m at $0.08/GB-month)
+        - 6000 * 0.005/provisioned IOPS-month = 30/m = $592.32/yr
+        - in reality, can offload to s3 by the hour
+    - us-east-1a
+- client: c7i.xlarge
+    - 10 writers
+    - 15 readers
+    - 1 KB payload
+    - 120s duration
+    - us-east-1a

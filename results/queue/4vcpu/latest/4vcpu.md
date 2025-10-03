@@ -28,7 +28,7 @@
     - us-east-1a
 - client: c7i.xlarge
     - 10 writers
-    - 55 readers
+    - 15 readers
     - 1 KB payload
     - 120s duration
     - us-east-1a

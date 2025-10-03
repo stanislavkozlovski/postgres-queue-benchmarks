@@ -59,25 +59,6 @@ func (br *PubSubBenchmarkRun) Run() {
 
 	var wg sync.WaitGroup
 
-	// --- spawn writers, round-robin partitions ---
-	prodPerPart := make([]int, cfg.NumPartitions)
-	for w := 0; w < cfg.Writers; w++ {
-		pid := (w % cfg.NumPartitions) + 1 // 1-based
-		prodPerPart[pid-1]++
-		wg.Add(1)
-		go br.Writer(w, pid, &wg)
-	}
-
-	// summary log: producers per partition in one line
-	summary := ""
-	for i, cnt := range prodPerPart {
-		if i > 0 {
-			summary += " "
-		}
-		summary += fmt.Sprintf("p%d=%d", i+1, cnt)
-	}
-	log.Printf("[pub info] producers per partition [%s]", summary)
-
 	// --- spawn readers, pinned 1:1 to partitions per group ---
 	for groupID := 0; groupID < cfg.NumConsumerGroups; groupID++ {
 		gm := br.PubSubMetrics.Groups[groupID]
@@ -88,6 +69,27 @@ func (br *PubSubBenchmarkRun) Run() {
 			go br.GroupMember(groupID, gm, consumerID, p, &wg)
 		}
 	}
+
+	// --- spawn writers, round-robin partitions ---
+	prodPerPart := make([]int, cfg.NumPartitions)
+	for w := 0; w < cfg.Writers; w++ {
+		pid := (w % cfg.NumPartitions) + 1 // 1-based
+		prodPerPart[pid-1]++
+		wg.Add(1)
+		go br.Writer(w, pid, &wg)
+	}
+	time.Sleep(1000 * time.Millisecond)
+	log.Printf("[pub info] spawned readers")
+
+	// summary log: producers per partition in one line
+	summary := ""
+	for i, cnt := range prodPerPart {
+		if i > 0 {
+			summary += " "
+		}
+		summary += fmt.Sprintf("p%d=%d", i+1, cnt)
+	}
+	log.Printf("[pub info] producers per partition [%s]", summary)
 
 	// reporter
 	wg.Add(1)

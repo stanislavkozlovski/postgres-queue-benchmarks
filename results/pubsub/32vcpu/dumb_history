@@ -1,0 +1,118 @@
+```
+    1  grep -i huge /proc/meminfo
+    2  echo never | sudo tee /sys/kernel/mm/transparent_hugepage/enabled
+    3  echo never | sudo tee /sys/kernel/mm/transparent_hugepage/defrag
+    4  sudo tee /etc/systemd/system/disable-thp.service >/dev/null <<'EOF'
+[Unit]
+Description=Disable Transparent Huge Pages
+DefaultDependencies=no
+Before=sysinit.target
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/bash -lc 'echo never > /sys/kernel/mm/transparent_hugepage/enabled'
+ExecStart=/usr/bin/bash -lc 'echo never > /sys/kernel/mm/transparent_hugepage/defrag'
+RemainAfterExit=yes
+[Install]
+WantedBy=sysinit.target
+EOF
+
+    5  sudo systemctl daemon-reload && sudo systemctl enable --now disable-thp
+    6  sudo sysctl -w vm.nr_hugepages=24576
+    7  echo 'vm.nr_hugepages=24576' | sudo tee /etc/sysctl.d/60-postgres-hugepages.conf
+    8  sudo sysctl --system
+    9  gid=$(getent group postgres | cut -d: -f3)
+   10  echo "vm.hugetlb_shm_group=$gid" | sudo tee /etc/sysctl.d/61-postgres-hugetlb-group.conf
+   11  sudo sysctl --system
+   12  lsblk
+   13  sudo mkfs.xfs -f $DEV
+   14  sudo mkdir -p $MNT
+   15  sudo mount $DEV $MNT
+   16  sudo mkdir -p $MNT/pg17
+   17  MNT=/pgdata
+   18  sudo mkfs.xfs -f $DEV
+   19  sudo mkdir -p $MNT
+   20  sudo mount $DEV $MNT
+   21  sudo mkdir -p $MNT/pg17
+   22  # persist mount
+   23  UUID=$(sudo blkid -s UUID -o value $DEV)
+   24  echo "UUID=$UUID $MNT xfs defaults,nofail 0 2" | sudo tee -a /etc/fstab
+   25  sudo mkfs.xfs -f $DEV
+   26  echo $DEV
+   27  DEV=/dev/nvme1n1    # adjust if lsblk shows a different device
+   28  MNT=/pgdata
+   29  sudo mkfs.xfs -f $DEV
+   30  sudo mkdir -p $MNT
+   31  sudo mount $DEV $MNT
+   32  sudo mkdir -p $MNT/pg17
+   33  # persist mount
+   34  UUID=$(sudo blkid -s UUID -o value $DEV)
+   35  echo "UUID=$UUID $MNT xfs defaults,nofail 0 2" | sudo tee -a /etc/fstab
+   36  sudo apt-get update -y
+   37  sudo apt-get install -y curl ca-certificates gnupg lsb-release
+   38  curl https://www.postgresql.org/media/keys/ACCC4CF8.asc |   gpg --dearmor | sudo tee /etc/apt/trusted.gpg.d/pgdg.gpg >/dev/null
+   39  echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" |   sudo tee /etc/apt/sources.list.d/pgdg.list
+   40  sudo apt-get update -y # twice, post updating the sources
+   41  sudo apt-get install -y postgresql-17 postgresql-client-17 postgresql-common
+   42  sudo pg_dropcluster --stop 17 main
+   43  sudo chown -R postgres:postgres $MNT/pg17
+   44  sudo chmod 700 $MNT/pg17
+   45  sudo chown postgres:postgres $MNT
+   46  sudo chmod 700 $MNT
+   47  sudo pg_createcluster 17 main --datadir=$MNT/pg17 --port=5432 -- -c listen_addresses='172.31.44.169,localhost'
+   48  sudo systemctl start postgresql@17-main
+   49  pg_lsclusters
+   50  echo "host all all 0.0.0.0/0 md5" | sudo tee -a /etc/postgresql/17/main/pg_hba.conf
+   51  sudo systemctl reload postgresql@17-main
+   52  sudo -u postgres createdb benchmark
+   53  sudo -u postgres psql -c "ALTER USER postgres WITH PASSWORD 'postgres';"
+   54  vi comment_out.sh
+   55  chmod +x comment_out.sh
+   56  ./comment_out.sh
+   57  vi /etc/postgresql/17/main/conf.d/99-custom.conf
+   58  sudo vi /etc/postgresql/17/main/conf.d/99-custom.conf
+   59  sudo systemctl reload postgresql@17-main
+   60  psql -U postgres -h localhost -p 5432 benchmark
+   61  sudo vi /etc/postgresql/17/main/conf.d/99-custom.conf
+   62  sudo systemctl reload postgresql@17-main
+   63  sudo vi /etc/postgresql/17/main/postgresql.conf
+   64  sudo systemctl reload postgresql@17-main
+   65  psql -U postgres -h localhost -p 5432 benchmark
+   66  sudo systemctl reload postgresql@17-main
+   67  systemctl list-units | grep postgres
+   68  psql -U postgres -h localhost -p 5432 benchmark
+   69  sudo systemctl restart postgresql@17-main
+   70  systemctl status postgresql@17-main.service
+   71  htop
+   72  ps aux --sort=-%mem | head -20
+   73  sysctl kernel.shmmax
+   74  sysctl kernel.shmall
+   75  free -h
+   76  ipcs -m
+   77  ipcs -m | grep -E "postgres|524288"
+   78  ipcs -m
+   79  sudo vi /etc/postgresql/17/main/postgresql.conf
+   80  systemctl status postgresql@17-main.service
+   81  sudo vi /etc/postgresql/17/main/conf.d/99-custom.conf
+   82  sudo systemctl start postgresql@17-main
+   83  sudo systemctl status postgresql@17-main
+   84  cat /proc/meminfo | head -30
+   85  grep -i huge /proc/meminfo
+   86  sysctl vm.overcommit_memory
+   87  sysctl vm.overcommit_ratio
+   88  history
+   89  q
+   90  sudo vi /etc/postgresql/17/main/conf.d/99-custom.conf
+   91  sudo vi /etc/postgresql/17/main/postgresql.conf
+   92  sudo systemctl restart postgresql@17-main
+   93  sudo systemctl status postgresql@17-main
+   94  sudo journalctl -u postgresql@17-main -n 20
+   95  ls -la /dev/hugepages/
+   96  sudo -u postgres id
+   97  echo 27000 | sudo tee /sys/kernel/mm/hugepages/hugepages-2048kB/nr_hugepages
+   98  grep -i huge /proc/meminfo
+   99  echo "vm.nr_hugepages = 27000" | sudo tee -a /etc/sysctl.conf
+  100  sudo systemctl start postgresql@17-main
+  101  history
+  102  clear
+  103  history
+  ```
