@@ -59,7 +59,7 @@ func (br *QueueBenchmarkRun) Setup() error {
 				autovacuum_vacuum_scale_factor = 0.01,
 				autovacuum_vacuum_insert_threshold = 1000,
 				autovacuum_analyze_scale_factor = 0.05,
-				fillfactor = 70
+				fillfactor = 90
 			)`
 		if _, err := br.Db.ExecContext(br.Ctx, tuneSQL); err != nil {
 			return fmt.Errorf("tune-table: %w", err)
