@@ -78,7 +78,7 @@ func (br *PubSubBenchmarkRun) GroupMember(groupID int, gm *GroupMetrics, consume
 
 	groupKey := fmt.Sprintf("g%d", groupID)
 
-	err := br.ensureConsumerGroupRow(conn, groupKey, partitionID)
+	err = br.ensureConsumerGroupRow(conn, groupKey, partitionID)
 	if err != nil {
 		panic("ensure group row failed: " + err.Error())
 	}
