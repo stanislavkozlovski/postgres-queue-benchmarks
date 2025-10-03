@@ -69,7 +69,11 @@ const readSQL = `SELECT c_offset, payload, created_at
 func (br *PubSubBenchmarkRun) GroupMember(groupID int, gm *GroupMetrics, consumerID int, partitionID int, wg *sync.WaitGroup) {
 	defer wg.Done()
 
-	conn, _ := br.Db.Conn(br.Ctx)
+	conn, err := br.Db.Conn(br.Ctx)
+	if err != nil {
+		log.Printf("[consumer g%d r%d p%d] get conn err: %v", groupID, consumerID, partitionID, err)
+		return
+	}
 	defer conn.Close()
 
 	groupKey := fmt.Sprintf("g%d", groupID)
