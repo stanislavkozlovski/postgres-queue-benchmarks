@@ -3,6 +3,7 @@ package pubsub
 import (
 	"crypto/rand"
 	"database/sql"
+	"fmt"
 	"github.com/lib/pq"
 	"log"
 	"sync"
@@ -15,16 +16,17 @@ const insertWithReserveSQL = `
 WITH reserve AS (
   UPDATE log_counter
   SET next_offset = next_offset + $1
-  WHERE id = 1
+  WHERE id = $3::int
   RETURNING (next_offset - $1) AS first_off
 )
-INSERT INTO topicpartition(c_offset, payload)
+
+INSERT INTO topicpartition%d(c_offset, payload)
 SELECT r.first_off + p.ord - 1, p.payload
 FROM reserve r,
      unnest($2::bytea[]) WITH ORDINALITY AS p(payload, ord);
 `
 
-func (br *PubSubBenchmarkRun) Writer(id int, wg *sync.WaitGroup) {
+func (br *PubSubBenchmarkRun) Writer(id int, partitionID int, wg *sync.WaitGroup) {
 	defer wg.Done()
 	conn, _ := br.Db.Conn(br.Ctx)
 	defer conn.Close()
@@ -37,7 +39,8 @@ func (br *PubSubBenchmarkRun) Writer(id int, wg *sync.WaitGroup) {
 	}
 
 	// prepare once on the base db; bind to tx with tx.Stmt(...) each loop
-	stmt, err := br.Db.PrepareContext(br.Ctx, insertWithReserveSQL)
+	insertSQL := fmt.Sprintf(insertWithReserveSQL, partitionID)
+	stmt, err := br.Db.PrepareContext(br.Ctx, insertSQL)
 	if err != nil {
 		log.Printf("[writer %d] prepare failed: %v", id, err)
 		return
@@ -68,6 +71,7 @@ func (br *PubSubBenchmarkRun) Writer(id int, wg *sync.WaitGroup) {
 				br.Ctx,
 				batchSize,          // $1 - the batch size
 				pq.Array(payloads), // $2 :: bytea[] - the payload
+				partitionID,        // $3 - the partition (table) ID
 			)
 			if execErr != nil {
 				_ = tx.Rollback()

@@ -6,15 +6,12 @@ import (
 	"time"
 )
 
-func (pm *PubSubMetrics) PrintSummary(dur time.Duration, kafkaSemantics bool) {
+func (pm *PubSubMetrics) PrintSummary(dur time.Duration) {
 	fmt.Printf("\n=== PubSub Summary ===\n")
 	secs := dur.Seconds()
 
-	semantics := "at-most-once (best effort)"
-	if kafkaSemantics {
-		semantics = "at-least-once (strict ordering)"
-	}
-	fmt.Printf("Delivery Semantics: %s\n", semantics)
+	fmt.Printf("Delivery Semantics: at-least-once (strict ordering)\n")
+	fmt.Printf("Number of partitions: %d\n", pm.NumPartitions)
 	fmt.Printf("Duration: %s (%.1fs)\n", dur, secs)
 
 	snapshots := pm.Snapshot()

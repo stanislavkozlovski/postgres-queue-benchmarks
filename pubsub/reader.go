@@ -18,7 +18,7 @@ const claimSQL = `
 WITH counter_tip AS (
   SELECT (next_offset - 1) AS highest_committed_offset
   FROM log_counter
-  WHERE id = 1
+  WHERE id = $3::int   -- partition id passed i
 ),
 
     
@@ -35,7 +35,7 @@ to_claim AS (
       GREATEST(0, (SELECT highest_committed_offset FROM counter_tip) - c.next_offset + 1)
     ) AS delta
   FROM consumer_offsets c
-  WHERE c.group_id = $1::text
+  WHERE c.group_id = $1::text AND c.topic_id = $3::int
   FOR UPDATE
 ),
 
@@ -45,7 +45,7 @@ upd AS (
   -- on second read: 2 + 100 = 102
   SET next_offset = c.next_offset + t.delta
   FROM to_claim t
-  WHERE c.group_id = t.group_id
+  WHERE c.group_id = t.group_id AND c.topic_id = $3::int
   -- on first read, this will be 1,0; 1 > 0, so it's an empty claim and there's nothing to read.
   -- if there was one record, it'd be 1,1, which would then have us fetch with ID between 1 and 1 -- i.e we'd get that record
   RETURNING
@@ -57,16 +57,16 @@ SELECT claimed_start_offset, claimed_end_offset
 FROM upd;
 `
 
+// partitionID formatted in runtime
 const readSQL = `SELECT c_offset, payload, created_at
-		   	FROM topicpartition
+		   	FROM topicpartition%d
 		  	WHERE c_offset BETWEEN $1 AND $2
 		  	ORDER BY c_offset`
 
 // GroupMember runs the read loop for a single subscriber in a consumer group.
 // groupID is the unique group identifier.
 // kafkaSemantics toggles whether to use At-Least-Once and Strict Order in processing;
-func (br *PubSubBenchmarkRun) GroupMember(groupID int, gm *GroupMetrics, consumerID int, wg *sync.WaitGroup,
-	kafkaSemantics bool) {
+func (br *PubSubBenchmarkRun) GroupMember(groupID int, gm *GroupMetrics, consumerID int, partitionID int, wg *sync.WaitGroup) {
 	defer wg.Done()
 
 	conn, _ := br.Db.Conn(br.Ctx)
@@ -74,7 +74,7 @@ func (br *PubSubBenchmarkRun) GroupMember(groupID int, gm *GroupMetrics, consume
 
 	groupKey := fmt.Sprintf("g%d", groupID)
 
-	err := br.ensureConsumerGroupRow(conn, groupKey)
+	err := br.ensureConsumerGroupRow(conn, groupKey, partitionID)
 	if err != nil {
 		panic("ensure group row failed: " + err.Error())
 	}
@@ -84,7 +84,8 @@ func (br *PubSubBenchmarkRun) GroupMember(groupID int, gm *GroupMetrics, consume
 	}
 	defer claimStmt.Close()
 
-	readStmt, err := conn.PrepareContext(br.Ctx, readSQL)
+	partitionReadSQL := fmt.Sprintf(readSQL, partitionID)
+	readStmt, err := conn.PrepareContext(br.Ctx, partitionReadSQL)
 	if err != nil {
 		panic("prepare readStmt failed: " + err.Error())
 	}
@@ -95,92 +96,15 @@ func (br *PubSubBenchmarkRun) GroupMember(groupID int, gm *GroupMetrics, consume
 		case <-br.Ctx.Done():
 			return
 		default:
-			if kafkaSemantics {
-				br.kafkaSemanticRead(conn, gm, groupKey, consumerID, claimStmt, readStmt)
-			} else {
-				br.atMostOnceRead(conn, gm, groupKey, consumerID, claimStmt, readStmt)
-			}
+			br.kafkaSemanticRead(conn, gm, groupKey, consumerID, partitionID, claimStmt, readStmt)
 		}
 	}
-}
-
-// atMostOnce does the Claim Offset in a transaction, and then reads/processes the data outside it.
-// This leads to at most once semantics, as claims can be lost if the reader crashes after claiming and doesn't process.
-// Retries could be added to ensure at-least-once, but that's extra work.
-// This also breaks ordering guarantees, because during errors/retries/timeouts other consumers can claim and process future messages before this one.
-func (br *PubSubBenchmarkRun) atMostOnceRead(conn *sql.Conn, gm *GroupMetrics, groupKey string, consumerID int, claimOffsetsStmt *sql.Stmt, readDataStmt *sql.Stmt) {
-	// -- Claim TX Start
-	claimOffsetTx, err := conn.BeginTx(br.Ctx, &sql.TxOptions{Isolation: sql.LevelReadCommitted})
-	if err != nil {
-		gm.ReadErrors.Add(1)
-		return
-	}
-
-	var startOff, endOff sql.NullInt64
-	if err := claimOffsetTx.StmtContext(br.Ctx, claimOffsetsStmt).QueryRowContext(br.Ctx,
-		groupKey, br.config.ReadBatchSize).Scan(&startOff, &endOff); err != nil {
-		_ = claimOffsetTx.Rollback()
-		log.Printf("[consumer %s r%d] Claim err: %v", groupKey, consumerID, err)
-		gm.ClaimErrors.Add(1)
-		time.Sleep(jitter(100*time.Microsecond, 800*time.Microsecond))
-		return
-	}
-
-	if !startOff.Valid || !endOff.Valid || startOff.Int64 > endOff.Int64 {
-		// nothing to claim
-		_ = claimOffsetTx.Commit()
-		gm.EmptyClaims.Add(1)
-		time.Sleep(jitter(100*time.Microsecond, 2*time.Millisecond))
-		return
-	}
-
-	if err := claimOffsetTx.Commit(); err != nil {
-		log.Printf("[consumer %s r%d] Claim TX Commit err: %v", groupKey, consumerID, err)
-		time.Sleep(jitter(100*time.Microsecond, 800*time.Microsecond))
-		gm.ClaimErrors.Add(1)
-		return
-	}
-	// -- TX is over
-
-	// read the claimed range
-	start := time.Now()
-	rows, err := readDataStmt.QueryContext(br.Ctx, startOff.Int64, endOff.Int64)
-	if err != nil {
-		gm.ReadErrors.Add(1)
-		return
-	}
-	defer rows.Close()
-
-	var count int64
-	for rows.Next() {
-		var off int64
-		var payload []byte
-		var created time.Time
-		if err := rows.Scan(&off, &payload, &created); err != nil {
-			log.Printf("[consumer %s r%d] scan err: %v", groupKey, consumerID, err)
-			continue
-		}
-		count++
-
-		// TODO: “process payload”
-
-		e2eLat := time.Since(created).Nanoseconds()
-		_ = gm.ReaderE2EHists[consumerID].RecordValue(e2eLat)
-	}
-
-	// record metrics
-	gm.ReadsCompleted.Add(count)
-	gm.UpdatesCompleted.Add(count)
-	gm.PolledRecords.Add(count)
-	gm.Polls.Add(1)
-	lat := time.Since(start).Nanoseconds()
-	_ = gm.ReaderReadHists[consumerID].RecordValue(lat)
 }
 
 // kafkaSemanticRead does the Offset Claim + Select in one transaction.
 // This gives you at-least-once semantics and strict ordering.
 // It doesn't make much sense to run a lot of consumers in a group with this mode.
-func (br *PubSubBenchmarkRun) kafkaSemanticRead(conn *sql.Conn, gm *GroupMetrics, groupKey string, consumerID int, claimOffsetsStmt *sql.Stmt, readDataStmt *sql.Stmt) {
+func (br *PubSubBenchmarkRun) kafkaSemanticRead(conn *sql.Conn, gm *GroupMetrics, groupKey string, consumerID int, partitionID int, claimOffsetsStmt *sql.Stmt, readDataStmt *sql.Stmt) {
 	tx, err := conn.BeginTx(br.Ctx, &sql.TxOptions{Isolation: sql.LevelReadCommitted})
 	if err != nil {
 		gm.ReadErrors.Add(1)
@@ -189,10 +113,10 @@ func (br *PubSubBenchmarkRun) kafkaSemanticRead(conn *sql.Conn, gm *GroupMetrics
 
 	var startOff, endOff sql.NullInt64
 	if err := tx.StmtContext(br.Ctx, claimOffsetsStmt).QueryRowContext(br.Ctx,
-		groupKey, br.config.ReadBatchSize).Scan(&startOff, &endOff); err != nil {
+		groupKey, br.config.ReadBatchSize, partitionID).Scan(&startOff, &endOff); err != nil {
 		_ = tx.Rollback()
-		log.Printf("[consumer %s r%d] Claim err: %v (params: groupID=%v, batchSize=%d)",
-			groupKey, consumerID, err, groupKey, br.config.ReadBatchSize)
+		log.Printf("[consumer %s r%d p%d] claim err: %v (group=%s batch=%d)",
+			groupKey, consumerID, partitionID, err, groupKey, br.config.ReadBatchSize)
 		gm.ClaimErrors.Add(1)
 		time.Sleep(jitter(100*time.Microsecond, 800*time.Microsecond))
 		return
@@ -222,7 +146,7 @@ func (br *PubSubBenchmarkRun) kafkaSemanticRead(conn *sql.Conn, gm *GroupMetrics
 		var payload []byte
 		var created time.Time
 		if err := rows.Scan(&off, &payload, &created); err != nil {
-			log.Printf("[consumer %s r%d] scan err: %v", groupKey, consumerID, err)
+			log.Printf("[consumer %s r%d p%d] scan err: %v", groupKey, consumerID, partitionID, err)
 			continue
 		}
 		count++
@@ -267,7 +191,7 @@ func jitter(min, max time.Duration) time.Duration {
 // EnsureConsumerGroupRow makes sure a row exists in consumer_offsets for this group.
 // It creates one with next_offset = 1 if it doesn't already exist.
 // Safe to call multiple times; concurrent calls will not conflict.
-func (br *PubSubBenchmarkRun) ensureConsumerGroupRow(conn *sql.Conn, groupKey string) error {
+func (br *PubSubBenchmarkRun) ensureConsumerGroupRow(conn *sql.Conn, groupKey string, partitionID int) error {
 	tx, err := conn.BeginTx(br.Ctx, &sql.TxOptions{Isolation: sql.LevelReadCommitted})
 	if err != nil {
 		return fmt.Errorf("begin tx: %w", err)
@@ -275,10 +199,10 @@ func (br *PubSubBenchmarkRun) ensureConsumerGroupRow(conn *sql.Conn, groupKey st
 	defer func() { _ = tx.Rollback() }() // rollback is no-op if committed
 
 	_, err = tx.ExecContext(br.Ctx, `
-		INSERT INTO consumer_offsets (group_id, next_offset)
-		VALUES ($1::text, 1)
-		ON CONFLICT (group_id) DO NOTHING;
-	`, groupKey)
+INSERT INTO consumer_offsets (group_id, topic_id, next_offset)
+VALUES ($1::text, $2::int, 1)
+ON CONFLICT (group_id, topic_id) DO NOTHING;
+	`, groupKey, partitionID)
 	if err != nil {
 		return fmt.Errorf("insert consumer_offsets: %w", err)
 	}

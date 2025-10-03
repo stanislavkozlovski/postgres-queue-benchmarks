@@ -25,12 +25,12 @@ func main() {
 
 		writers        = flag.Int("writers", 4, "Number of writers")
 		readers        = flag.Int("readers", 4, "Number of readers")
+		numPartitions  = flag.Int("partitions", 10, "The number of logs (partitions for pub-sub)")
 		duration       = flag.Duration("duration", 30*time.Second, "Test duration")
 		payload        = flag.Int("payload", 1024, "Payload size in bytes")
 		reportEvery    = flag.Duration("report", 5*time.Second, "Report interval")
 		throttleWrites = flag.Int("throttle_writes", 0, "Throttle writer rows/sec (0=unlimited)")
 		tuneTableVac   = flag.Bool("tune-table-vacuum", false, "Apply aggressive autovacuum/fillfactor to queue table")
-		kafkaPubSub    = flag.Bool("kafka-pub-sub-semantics", false, "Whether to use at-least-once & strict ordering semantics via pubsub")
 		mode           = flag.String("mode", "queue", "mode: queue|pubsub - which benchmark to run")
 
 		// pubsub-specific
@@ -94,25 +94,25 @@ func main() {
 		// ensure we allow enough client-side connections
 		db.SetMaxOpenConns((numReaders * numCGroups) + numWriters + 2)
 		db.SetMaxIdleConns((numReaders * numCGroups) + numWriters + 2)
-
+		numParts := *numPartitions
 		pubsubCfg := &pubsub.PubSubConfig{
 			BaselineConfig:    *baseCfg,
 			NumConsumerGroups: *numGroups,
 			ReadBatchSize:     *readBatchSize,
 			WriteBatchSize:    *writeBatchSize,
-			KafkaSemantics:    *kafkaPubSub,
+			NumPartitions:     numParts,
 		}
 
 		br, err := pubsub.NewPubSubBenchmarkRun(pubsubCfg, db, ctx, limiter)
 		if err != nil {
 			log.Fatalf("connect: %v", err)
 		}
-		if err := br.Setup(); err != nil {
+		if err := br.Setup(numParts); err != nil {
 			log.Fatalf("setup: %v", err)
 		}
 		br.Run()
 		br.PrintSummary(pubsubCfg.Duration)
-		br.PubSubMetrics.PrintSummary(pubsubCfg.Duration, pubsubCfg.KafkaSemantics)
+		br.PubSubMetrics.PrintSummary(pubsubCfg.Duration)
 		_ = br.Db.Close()
 		log.Println("pubsub benchmark complete")
 

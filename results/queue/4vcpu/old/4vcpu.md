@@ -13,7 +13,7 @@
 ```bash
 ./pg_queue_bench   --host=$HOST   --port=5432   --db=benchmark   --user=postgres   --password=postgres   --writers=50   --readers=50   --duration=120s   --payload=1024   --report=5s
 ```
-Ran three times. See detailed results in [unlimited_writes_runs.md](./unlimited_writes_runs.md). It averages out to:
+Ran three times. See detailed results in [unlimited_writes_runs.md](unlimited_writes_runs.md). It averages out to:
 
 - ✍️ write: **12.1 MB/s**
 - 📖️ read: **2.8 MB/s**
@@ -40,7 +40,7 @@ Our goal is to figure out what's the max 1:1 ratio they can reach.  The methodol
 ```bash
 ./pg_queue_bench   --host=$HOST   --port=5432   --db=benchmark   --user=postgres   --password=postgres   --writers=50   --readers=50   --duration=120s   --payload=1024   --report=5s --throttle_writes 4500
 ```
-Ran three times. See detailed results in [limited_writes_runs.md](./limited_writes_runs.md). It averages out to:
+Ran three times. See detailed results in [limited_writes_runs.md](limited_writes_runs.md). It averages out to:
 
 - ✍️ write: **4.1 MiB/s**
 - 📖️ read: **4.1 MiB/s**

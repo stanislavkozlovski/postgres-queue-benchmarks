@@ -1,4 +1,4 @@
-![4vcpu_limited_writes_htop_screen.png](./4vcpu_limited_writes_htop_screen.png) for more details.
+![4vcpu_limited_writes_htop_screen.png](4vcpu_limited_writes_htop_screen.png) for more details.
 
 # Run 1
 ```bash

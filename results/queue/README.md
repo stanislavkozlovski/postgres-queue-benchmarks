@@ -52,7 +52,7 @@ sudo chmod 700 $MNT/pg17
 sudo chown postgres:postgres $MNT
 sudo chmod 700 $MNT
 
-sudo pg_createcluster 17 main --datadir=$MNT/pg17 --port=5432 -- -c listen_addresses='172.31.18.113,localhost'
+sudo pg_createcluster 17 main --datadir=$MNT/pg17 --port=5432 -- -c listen_addresses='172.31.81.66,localhost'
 sudo systemctl start postgresql@17-main
 
 pg_lsclusters
@@ -104,6 +104,7 @@ export HOST="172.31.18.113"  # adjust to your server's private IP
   --duration=120s \
   --payload=1024 \
   --report=5s \
+  --throttle_writes=3000 \
   --mode=queue
 ```
 

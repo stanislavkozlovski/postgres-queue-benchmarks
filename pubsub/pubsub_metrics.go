@@ -27,13 +27,15 @@ type GroupMetrics struct {
 // pubsubmetrics tracks per-consumer-group metrics.
 // keep using common.BaseMetrics for global aggregates; this is the per-group view.
 type PubSubMetrics struct {
-	Groups []*GroupMetrics // index == group id (0..numGroups-1)
+	Groups        []*GroupMetrics // index == group id (0..numGroups-1)
+	NumPartitions int
 }
 
 // ctor: numGroups = distinct consumer groups; readersPerGroup = subscribers per group
-func NewPubSubMetrics(numGroups, readersPerGroup int) *PubSubMetrics {
+func NewPubSubMetrics(numGroups, readersPerGroup int, numPartitions int) *PubSubMetrics {
 	pm := &PubSubMetrics{
-		Groups: make([]*GroupMetrics, numGroups),
+		Groups:        make([]*GroupMetrics, numGroups),
+		NumPartitions: numPartitions,
 	}
 	for g := 0; g < numGroups; g++ {
 		gm := &GroupMetrics{
